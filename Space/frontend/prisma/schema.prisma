@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  avatarUrl    String?
+  bio          String?
+  location     String?
+  role         String   @default("user")
+  createdAt    DateTime @default(now())
+
+  posts        Post[]
+  comments     Comment[]
+  votes        PostVote[]
+  observations Observation[]
+  favorites    FavoriteObject[]
+  sessions     Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum PostCategory {
+  OBSERVATION
+  ASTROPHOTOGRAPHY
+  QUESTION
+  EQUIPMENT
+  EVENT
+  OTHER
+}
+
+model Post {
+  id        String       @id @default(cuid())
+  title     String
+  content   String
+  imageUrl  String?
+  category  PostCategory @default(OTHER)
+  authorId  String
+  author    User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  comments Comment[]
+  votes    PostVote[]
+  tags     PostTag[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+model PostVote {
+  id     String   @id @default(cuid())
+  postId String
+  post   Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   VoteType
+
+  @@unique([postId, userId])
+}
+
+model Observation {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectName    String
+  objectType    String?
+  constellation String?
+  description   String?
+  rating        Int      @default(0)
+  coordinates   String?
+  observedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
+model FavoriteObject {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectName String
+  objectType String?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, objectName])
+}
+
+enum EventType {
+  METEOR
+  ECLIPSE
+  PLANETARY
+  LUNAR
+  SOLAR
+  OTHER
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  date        DateTime
+  time        String
+  title       String
+  description String
+  eventType   EventType @default(OTHER)
+  createdAt   DateTime  @default(now())
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  id     String @id @default(cuid())
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, tagId])
+}

@@ -2,7 +2,7 @@
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
 
-const Stellarium = dynamic(() => import('@/components/Stellarium'), {
+const Stellarium = dynamic(() => import('@/components/stellarium'), {
   ssr: false,
 });
 

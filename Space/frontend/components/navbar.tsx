@@ -2,13 +2,15 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useSession, signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { Menu, Telescope } from "lucide-react"
+import { Menu, Telescope, LogOut, User } from "lucide-react"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
+  const { data: session } = useSession()
 
   const navigation = [
     { name: "Home", href: "/" },
@@ -28,7 +30,6 @@ export function Navbar() {
           </span>
         </Link>
 
-        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6">
           {navigation.map((item) => (
             <Link
@@ -43,11 +44,27 @@ export function Navbar() {
 
         <div className="flex items-center space-x-4">
           <ThemeToggle />
-          <Button asChild variant="outline" className="hidden md:inline-flex">
-            <Link href="/auth">Sign In</Link>
-          </Button>
 
-          {/* Mobile Navigation */}
+          {session?.user ? (
+            <div className="hidden md:flex items-center gap-3">
+              <Link
+                href="/profile"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <User className="h-4 w-4" />
+                {session.user.name ?? session.user.email}
+              </Link>
+              <Button variant="ghost" size="sm" onClick={() => signOut()}>
+                <LogOut className="mr-1 h-4 w-4" />
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <Button asChild variant="outline" className="hidden md:inline-flex">
+              <Link href="/auth">Sign In</Link>
+            </Button>
+          )}
+
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
@@ -67,11 +84,33 @@ export function Navbar() {
                     {item.name}
                   </Link>
                 ))}
-                <Button asChild className="mt-4">
-                  <Link href="/auth" onClick={() => setIsOpen(false)}>
-                    Sign In
-                  </Link>
-                </Button>
+                {session?.user ? (
+                  <>
+                    <Link
+                      href="/profile"
+                      className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Profile
+                    </Link>
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => {
+                        setIsOpen(false)
+                        signOut()
+                      }}
+                    >
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <Button asChild className="mt-4">
+                    <Link href="/auth" onClick={() => setIsOpen(false)}>
+                      Sign In
+                    </Link>
+                  </Button>
+                )}
               </nav>
             </SheetContent>
           </Sheet>
