@@ -1,11 +1,11 @@
 # AGENTS.md
 
 ## Working directory
-All commands run from `Space/frontend/`. There is no separate backend — the API lives in Next.js route handlers under `app/api/`.
+All commands run from the repo root. The API lives in Next.js route handlers under `app/api/`.
 
 ## Setup
-- `git submodule update --init --recursive` — **required** before first run; the Stellarium Web Engine submodule lives at `Space/frontend/public/stellarium-web-engine/`
-- `npm install` (from `Space/frontend`)
+- `git submodule update --init --recursive` — **required** before first run; the Stellarium Web Engine submodule lives at `public/stellarium-web-engine/`
+- `npm install`
 
 ## Commands
 ```
