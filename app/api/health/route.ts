@@ -3,8 +3,8 @@ import fs from "fs";
 import path from "path";
 
 const FILES = [
-  "public/stellarium-web-engine/build/stellarium-web-engine.js",
-  "public/stellarium-web-engine/build/stellarium-web-engine.wasm",
+  "public/stellarium-build/stellarium-web-engine.js",
+  "public/stellarium-build/stellarium-web-engine.wasm",
 ];
 
 export async function GET() {

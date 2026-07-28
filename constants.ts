@@ -1,9 +1,9 @@
 import type { ObserverLocation, StelCore } from "./types";
 
 export const STELLARIUM_SCRIPT_SRC =
-  "/stellarium-web-engine/build/stellarium-web-engine.js";
+  "/stellarium-build/stellarium-web-engine.js";
 export const STELLARIUM_WASM_SRC =
-  "/stellarium-web-engine/build/stellarium-web-engine.wasm";
+  "/stellarium-build/stellarium-web-engine.wasm";
 
 const SKY_DATA_BASE_URL = "/test-skydata/";
 
