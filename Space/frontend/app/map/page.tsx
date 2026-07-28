@@ -1,18 +1,16 @@
 "use client";
 import dynamic from 'next/dynamic';
-import Head from 'next/head';
+import { usePageTitle } from '@/lib/page-title';
 
 const Stellarium = dynamic(() => import('@/components/stellarium'), {
   ssr: false,
 });
 
 const StellariumPage: React.FC = () => {
+  usePageTitle("Star Map - SpaceMonkey");
+
   return (
     <div>
-      <Head>
-        <title>Stellarium - Astronomy Enthusiast</title>
-        <meta name="description" content="Interactive Stellarium Web Engine" />
-      </Head>
       <Stellarium />
     </div>
   );

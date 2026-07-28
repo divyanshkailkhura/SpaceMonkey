@@ -1,9 +1,14 @@
 import type React from "react"
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Compass, Calendar, BookOpen, Users, ArrowRight } from "lucide-react"
 import { StarBackground } from "@/components/star-background"
+
+export const metadata: Metadata = {
+  title: "SpaceMonkey - Explore the Cosmos",
+}
 
 export default function HomePage() {
   return (

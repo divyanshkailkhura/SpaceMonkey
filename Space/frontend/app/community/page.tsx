@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
+import { usePageTitle } from "@/lib/page-title"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -91,6 +92,7 @@ const CATEGORY_OPTIONS = [
 ]
 
 export default function CommunityPage() {
+  usePageTitle("Community - SpaceMonkey")
   const { data: session } = useSession()
   const [activeTab, setActiveTab] = useState("popular")
   const [searchQuery, setSearchQuery] = useState("")
@@ -108,6 +110,7 @@ export default function CommunityPage() {
   const [createCategory, setCreateCategory] = useState("OTHER")
   const [createTags, setCreateTags] = useState("")
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState("")
 
   const fetchPosts = useCallback(async (sort: string, search: string) => {
     setLoading(true)
@@ -137,27 +140,29 @@ export default function CommunityPage() {
 
   const handleCreate = async () => {
     if (!createTitle.trim() || !createContent.trim()) return
-    setCreating(true)
-    try {
-      const tags = createTags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean)
-      await api.post("/api/posts", {
-        title: createTitle,
-        content: createContent,
-        category: createCategory,
-        tags,
-      })
-      setIsCreateOpen(false)
-      setCreateTitle("")
-      setCreateContent("")
-      setCreateCategory("OTHER")
-      setCreateTags("")
-      fetchPosts(activeTab, searchQuery)
-      api.get<StatsData>("/api/stats").then(setStats).catch(() => {})
-    } catch {
-    } finally {
+      setCreateError("")
+      setCreating(true)
+      try {
+        const tags = createTags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+        await api.post("/api/posts", {
+          title: createTitle,
+          content: createContent,
+          category: createCategory,
+          tags,
+        })
+        setIsCreateOpen(false)
+        setCreateTitle("")
+        setCreateContent("")
+        setCreateCategory("OTHER")
+        setCreateTags("")
+        fetchPosts(activeTab, searchQuery)
+        api.get<StatsData>("/api/stats").then(setStats).catch(() => {})
+      } catch (e) {
+        setCreateError(e instanceof Error ? e.message : "Failed to create post")
+      } finally {
       setCreating(false)
     }
   }
@@ -237,7 +242,7 @@ export default function CommunityPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={(v) => { setIsCreateOpen(v); if (!v) setCreateError(""); }}>
             <DialogTrigger asChild>
               <Button disabled={!session}>
                 <PenSquare className="mr-2 h-4 w-4" />
@@ -278,6 +283,9 @@ export default function CommunityPage() {
                   <Input id="tags" placeholder="Galaxy, Astrophotography" value={createTags} onChange={(e) => setCreateTags(e.target.value)} />
                 </div>
               </div>
+              {createError && (
+                <p className="text-sm text-red-500 text-center">{createError}</p>
+              )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
                 <Button onClick={handleCreate} disabled={creating}>{creating ? "Posting..." : "Post"}</Button>
@@ -460,6 +468,6 @@ export default function CommunityPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
   )
 }

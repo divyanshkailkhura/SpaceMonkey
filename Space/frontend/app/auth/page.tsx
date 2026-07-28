@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import { usePageTitle } from "@/lib/page-title"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
 import Link from "next/link"
@@ -13,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StarBackground } from "@/components/star-background"
 
 export default function AuthPage() {
+  usePageTitle("Sign In - SpaceMonkey")
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export default function AuthPage() {
       <StarBackground />
       <Card className="mx-auto w-full max-w-md border-purple-800/20 bg-card/80 backdrop-blur-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-center text-2xl">Welcome to AstroMentor</CardTitle>
+          <CardTitle className="text-center text-2xl">Welcome to SpaceMonkey</CardTitle>
           <CardDescription className="text-center">Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>

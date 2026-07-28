@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { usePageTitle } from "@/lib/page-title";
 import {
   Tabs,
   TabsList,
@@ -53,6 +54,7 @@ function fmtFull(date: Date) {
 }
 
 export default function EventsPage() {
+  usePageTitle("Events - SpaceMonkey")
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);

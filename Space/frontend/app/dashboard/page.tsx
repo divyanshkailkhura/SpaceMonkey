@@ -1,7 +1,8 @@
 "use client";
-
+ 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePageTitle } from "@/lib/page-title";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,10 +42,12 @@ function formatObsDate(dateStr: string) {
 }
 
 export default function DashboardPage() {
+  usePageTitle("Dashboard - SpaceMonkey")
   const { data: session } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [obsCount, setObsCount] = useState(0);
+  const [postCount, setPostCount] = useState(0);
 
   useEffect(() => {
     api.get<UserProfile>("/api/users/me").then(setProfile).catch(() => {});
@@ -52,6 +55,7 @@ export default function DashboardPage() {
       .then((r) => r.json())
       .then((d) => { setObservations(d.data ?? []); setObsCount(d.meta?.total ?? 0); })
       .catch(() => {});
+    fetch("/api/stats").then((r) => r.json()).then((d) => setPostCount(d.data?.posts ?? 0)).catch(() => {});
   }, []);
 
   const displayName = session?.user?.name ?? profile?.name ?? "Astronomer";
@@ -109,7 +113,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-muted-foreground">Observations</p>
               </div>
               <div>
-                <p className="text-2xl font-bold">—</p>
+                <p className="text-2xl font-bold">{postCount}</p>
                 <p className="text-xs text-muted-foreground">Posts</p>
               </div>
             </div>

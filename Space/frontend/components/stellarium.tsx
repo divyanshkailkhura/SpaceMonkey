@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { ControlsBar } from "@/components/ControlsBar";
 import { ErrorToast } from "@/components/ErrorToast";
 import { LocationDrawer } from "@/components/LocationDrawer";
@@ -13,9 +14,11 @@ import type { StelObject } from "@/types";
 import { getObjectDetails, getObjectName } from "@/utils/objectInfo";
 
 export default function Stellarium() {
+  const { data: session } = useSession();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [selectedObject, setSelectedObject] = useState<StelObject | null>(null);
+  const [favoriteToast, setFavoriteToast] = useState<string | null>(null);
 
   const {
     location,
@@ -50,10 +53,32 @@ export default function Stellarium() {
     [selectedObject, stel]
   );
 
-  // Two independent error sources (engine load vs. location lookup) share
-  // one toast; whichever fired gets shown, and dismissing clears that one.
   const error = engineError ?? locationError;
   const clearError = engineError ? clearEngineError : clearLocationError;
+
+  const handleAddToFavorites = useCallback(async (name: string, type: string) => {
+    if (!session) {
+      setFavoriteToast("Sign in to favorite");
+      setTimeout(() => setFavoriteToast(null), 2000);
+      return;
+    }
+    try {
+      const res = await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objectName: name, objectType: type }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data) {
+        setFavoriteToast("★ Added to Favorites!");
+      } else {
+        setFavoriteToast("☆ Removed from Favorites");
+      }
+    } catch {
+      setFavoriteToast("Failed");
+    }
+    setTimeout(() => setFavoriteToast(null), 2000);
+  }, [session]);
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-black">
@@ -86,6 +111,8 @@ export default function Stellarium() {
           wikipediaDescription={wikipediaDescription}
           loadingWikipedia={loadingWikipedia}
           onClose={() => setSelectedObject(null)}
+          onAddToFavorites={handleAddToFavorites}
+          favoriteToast={favoriteToast}
         />
       )}
 

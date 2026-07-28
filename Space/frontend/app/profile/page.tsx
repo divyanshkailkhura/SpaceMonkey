@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePageTitle } from "@/lib/page-title";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Camera, Telescope, Star, Plus } from "lucide-react";
+import { Camera, Telescope, Star, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface UserProfile {
@@ -40,6 +41,13 @@ interface Observation {
   observedAt: string;
 }
 
+interface FavoriteItem {
+  id: string;
+  objectName: string;
+  objectType: string | null;
+  createdAt: string;
+}
+
 function formatObsDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "long",
@@ -58,10 +66,13 @@ function getInitials(name: string | null) {
 }
 
 export default function ProfilePage() {
+  usePageTitle("Profile - SpaceMonkey")
   const { data: session } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [obsLoading, setObsLoading] = useState(true);
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [favLoading, setFavLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("observations");
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -86,9 +97,18 @@ export default function ProfilePage() {
       .finally(() => setObsLoading(false));
   };
 
+  const fetchFavorites = () => {
+    setFavLoading(true);
+    api.get<FavoriteItem[]>("/api/favorites")
+      .then((d) => setFavorites(d ?? []))
+      .catch(() => {})
+      .finally(() => setFavLoading(false));
+  };
+
   useEffect(() => {
     api.get<UserProfile>("/api/users/me").then(setProfile).catch(() => {});
     fetchObservations();
+    fetchFavorites();
   }, []);
 
   useEffect(() => {
@@ -150,7 +170,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <>
+      <div className="container mx-auto px-4 py-8">
       <div className="mb-8 grid gap-6 md:grid-cols-[300px_1fr]">
         <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-6">
@@ -310,12 +331,40 @@ export default function ProfilePage() {
             <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
               <CardContent className="p-6">
                 <h3 className="text-xl font-semibold mb-4">Favorites</h3>
-                <p className="text-muted-foreground">No favorites yet. Click objects on the star map to add them!</p>
+                {favLoading ? (
+                  <p className="text-muted-foreground">Loading...</p>
+                ) : favorites.length === 0 ? (
+                  <p className="text-muted-foreground">No favorites yet. Click objects on the star map to add them!</p>
+                ) : (
+                  <div className="space-y-3">
+                    {favorites.map((fav) => (
+                      <div key={fav.id} className="flex items-center gap-4 rounded-lg border border-border p-3">
+                        <Star className="h-6 w-6 text-purple-500 shrink-0 fill-purple-500" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{fav.objectName}</p>
+                          {fav.objectType && <p className="text-xs text-muted-foreground">{fav.objectType}</p>}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-500"
+                          onClick={async () => {
+                            await api.delete(`/api/favorites/${fav.id}`);
+                            setFavorites((prev) => prev.filter((f) => f.id !== fav.id));
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
         </div>
       </div>
-    </div>
+    </div> {/* container */}
+    </>
   );
 }

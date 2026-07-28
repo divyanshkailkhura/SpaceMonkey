@@ -13,7 +13,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <title>AstroMentor - Learn Astronomy</title>
+        <title>SpaceMonkey - Explore the Cosmos</title>
         <meta name="description" content="Modern, interactive astronomy learning platform for stargazers" />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">

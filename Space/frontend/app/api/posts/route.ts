@@ -3,7 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
-async function attachScore(db: Awaited<ReturnType<typeof getDb>>, posts: Record<string, unknown>[], userId: string | undefined) {
+interface PostRow {
+  id: string;
+  _count: { comments: number };
+  [key: string]: unknown;
+}
+
+async function attachScore(db: Awaited<ReturnType<typeof getDb>>, posts: PostRow[], userId: string | undefined) {
   return Promise.all(
     posts.map(async (post) => {
       const [upvotes, downvotes] = await Promise.all([
