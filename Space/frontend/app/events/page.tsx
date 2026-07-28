@@ -1,9 +1,6 @@
-/* -------------------------------------------------------------------------- */
-/* pages/events/page.tsx                                                      */
-/* -------------------------------------------------------------------------- */
 "use client";
 
-import React, { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Tabs,
   TabsList,
@@ -19,93 +16,82 @@ import {
 } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
-import {
-  CalendarDays,
-  Moon,
-  Star,
-  Sun,
-  Telescope,
-} from "lucide-react";
+import { CalendarDays, Moon, Star, Sun, Telescope, Loader2 } from "lucide-react";
 
-/* -------------------------------------------------------------------------- */
-/* 1 . Event model + static data (placeholder)                                 */
-/* -------------------------------------------------------------------------- */
-export interface EventItem {
+interface EventItem {
   id: string;
-  date: string;          // ISO date string ‑ yyyy-mm-dd
-  time: string;          // Human-readable time
+  date: string;
+  time: string;
   title: string;
   description: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  eventType: string;
 }
 
-const events: EventItem[] = [
-  {
-    id: "1",
-    date: "2025-06-21",
-    time: "05:00 IST",
-    title: "Summer Solstice Sunrise",
-    description:
-      "The Sun reaches its highest position in the sky marking the beginning of astronomical summer.",
-    icon: Sun,
-  },
-  {
-    id: "2",
-    date: "2025-08-12",
-    time: "22:30 IST",
-    title: "Perseid Meteor Shower Peak",
-    description:
-      "One of the year's most prolific meteor showers, producing up to 100 meteors per hour at its peak.",
-    icon: Star,
-  },
-  {
-    id: "3",
-    date: "2025-09-07",
-    time: "03:17 IST",
-    title: "Last-Quarter Moon",
-    description:
-      "The Moon is three-quarters of the way through its orbit and appears half-illuminated.",
-    icon: Moon,
-  },
-  {
-    id: "4",
-    date: "2025-10-17",
-    time: "20:15 IST",
-    title: "Partial Lunar Eclipse",
-    description:
-      "Earth’s shadow obscures part of the Moon creating a dramatic celestial event visible from India.",
-    icon: EclipseIcon,
-  },
-];
+const EVENT_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  METEOR: Star,
+  ECLIPSE: Telescope,
+  PLANETARY: Sun,
+  LUNAR: Moon,
+  SOLAR: Sun,
+};
 
-/* Dummy eclipse icon (lucide-react has no “eclipse” glyph) */
-function EclipseIcon(props: React.SVGProps<SVGSVGElement>) {
-  return <Telescope {...props} />;
+function EventIcon({ type, className }: { type: string; className?: string }) {
+  const Icon = EVENT_ICONS[type] ?? Telescope;
+  return <Icon className={className} />;
 }
 
-/* -------------------------------------------------------------------------- */
-/* 2 . React component                                                         */
-/* -------------------------------------------------------------------------- */
+function fmtDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function fmtDisplay(date: Date) {
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function fmtFull(date: Date) {
+  return date.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export default function EventsPage() {
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
+  const [viewingMonth, setViewingMonth] = useState<Date>(new Date());
 
-  /* Events that match the calendar-selected date */
-  /* Safe filter – runs only when a date is selected */
-const eventsOnDate: EventItem[] = selectedDate
-  ? events.filter(
-      (evt) =>
-        new Date(evt.date).toDateString() === selectedDate.toDateString()
-    )
-  : [];
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/events")
+      .then((r) => r.json())
+      .then((d) => setEvents(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
+  const eventsOnDate = useMemo(() => {
+    if (!selectedDate) return [];
+    const target = fmtDate(selectedDate);
+    return events.filter((e) => e.date.startsWith(target));
+  }, [events, selectedDate]);
+
+  const currentMonthEvents = useMemo(() => {
+    const ym = fmtDate(viewingMonth).slice(0, 7);
+    return events.filter((e) => e.date.startsWith(ym)).sort((a, b) => a.date.localeCompare(b.date));
+  }, [events, viewingMonth]);
+
+  const eventDates = events.map((e) => new Date(e.date));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
-    <main className="p-6">
+    <main className="container mx-auto max-w-5xl px-4 py-8">
       <Tabs defaultValue="calendar" className="space-y-4">
-        {/* ------------------------------------------------------------------ */}
-        {/* Tab Header list (“Calendar / List”)                                 */}
-        {/* ------------------------------------------------------------------ */}
         <TabsList>
           <TabsTrigger value="calendar">
             <CalendarDays className="mr-2 size-4" />
@@ -117,71 +103,59 @@ const eventsOnDate: EventItem[] = selectedDate
           </TabsTrigger>
         </TabsList>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* 3a. Calendar TAB CONTENT                                           */}
-        {/* ------------------------------------------------------------------ */}
         <TabsContent value="calendar">
           <Card className="bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle>Event Calendar</CardTitle>
               <CardDescription>
-                Select a date to view scheduled celestial events
+                Highlighted dates have celestial events. Click a date to filter.
               </CardDescription>
             </CardHeader>
 
             <CardContent className="flex flex-col gap-6 md:flex-row">
-              {/* Calendar widget */}
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
+                month={viewingMonth}
+                onMonthChange={setViewingMonth}
                 className="rounded-md border"
+                modifiers={{ event: eventDates }}
+                modifiersClassNames={{ event: "font-bold text-purple-500 underline" }}
               />
 
-              {/* Events for the chosen date */}
-              <section className="flex-1">
+              <section className="flex-1 min-w-0">
                 <h3 className="mb-4 text-lg font-medium">
-                  Events on{" "}
                   {selectedDate
-                    ? selectedDate.toLocaleDateString("en-US", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })
-                    : "—"}
+                    ? `Events on ${fmtFull(selectedDate)}`
+                    : `Events in ${fmtDisplay(viewingMonth)}`}
                 </h3>
 
-                <div className="space-y-4">
-                  {eventsOnDate.map((evt) => (
+                <div className="space-y-2">
+                  {(selectedDate ? eventsOnDate : currentMonthEvents).map((evt) => (
                     <article
                       key={evt.id}
-                      className="flex items-center justify-between rounded-lg border p-4 hover:bg-accent/50"
+                      className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent/50 cursor-pointer"
+                      onClick={() => setSelectedEvent(evt)}
                     >
-                      <span className="flex items-center gap-3">
-                        <span className="rounded-full bg-primary/10 p-2">
-                          <evt.icon className="size-5 text-primary" />
+                      <span className="flex items-center gap-3 min-w-0">
+                        <span className="rounded-full bg-primary/10 p-2 shrink-0">
+                          <EventIcon type={evt.eventType} className="size-5 text-primary" />
                         </span>
-                        <span>
-                          <h4 className="font-medium">{evt.title}</h4>
+                        <span className="min-w-0">
+                          <h4 className="font-medium truncate">{evt.title}</h4>
                           <p className="text-sm text-muted-foreground">
-                            {evt.time}
+                            {new Date(evt.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            {" · "}{evt.time}
                           </p>
                         </span>
                       </span>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedEvent(evt)}
-                      >
-                        Details
-                      </Button>
                     </article>
                   ))}
 
-                  {selectedDate && eventsOnDate.length === 0 && (
-                    <p className="text-center text-muted-foreground">
-                      No events on this date
+                  {((selectedDate && eventsOnDate.length === 0) || (!selectedDate && currentMonthEvents.length === 0)) && (
+                    <p className="text-center text-muted-foreground py-4">
+                      {selectedDate ? "No events on this date" : "No events this month"}
                     </p>
                   )}
                 </div>
@@ -190,11 +164,8 @@ const eventsOnDate: EventItem[] = selectedDate
           </Card>
         </TabsContent>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* 3b. List TAB CONTENT                                               */}
-        {/* ------------------------------------------------------------------ */}
         <TabsContent value="list">
-          <Card className="bg-card/50 backdrop-blur-sm">
+          <Card className="bg-card/50 backdrop-blur-sm max-w-2xl mx-auto">
             <CardHeader>
               <CardTitle>All Upcoming Events</CardTitle>
               <CardDescription>
@@ -202,34 +173,33 @@ const eventsOnDate: EventItem[] = selectedDate
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="space-y-3">
-                {events.map((evt) => (
-                  <li
-                    key={evt.id}
-                    className="flex items-center justify-between rounded-lg border p-4 hover:bg-accent/50"
-                  >
-                    <span className="flex items-center gap-3">
-                      <evt.icon className="size-5 text-primary" />
-                      <span>{evt.title}</span>
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
+              {events.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No events scheduled yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {events.map((evt) => (
+                    <div
+                      key={evt.id}
+                      className="flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 cursor-pointer"
                       onClick={() => setSelectedEvent(evt)}
                     >
-                      Details
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                      <EventIcon type={evt.eventType} className="size-5 text-primary shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-medium truncate">{evt.title}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(evt.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {" · "}{evt.time}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* -------------------------------------------------------------------- */}
-      {/* 4 . Event Details Modal                                              */}
-      {/* -------------------------------------------------------------------- */}
       {selectedEvent && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm px-4">
           <div className="max-w-lg w-full rounded-xl bg-background p-6 shadow-xl">
@@ -267,18 +237,9 @@ const eventsOnDate: EventItem[] = selectedDate
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Utility icon used in TabsTrigger “List View”                               */
-/* -------------------------------------------------------------------------- */
 function ListIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg
-      {...props}
-      strokeWidth={1.5}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-    >
+    <svg {...props} strokeWidth={1.5} viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
     </svg>
   );

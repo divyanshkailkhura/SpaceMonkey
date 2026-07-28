@@ -18,9 +18,13 @@ interface UserProfile {
   createdAt: string;
 }
 
-interface DashboardStats {
-  observations: number;
-  posts: number;
+interface Observation {
+  id: string;
+  objectName: string;
+  objectType: string | null;
+  constellation: string | null;
+  rating: number;
+  observedAt: string;
 }
 
 function getInitials(name: string | null) {
@@ -32,14 +36,21 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+function formatObsDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [stats] = useState<DashboardStats>({ observations: 0, posts: 0 });
+  const [observations, setObservations] = useState<Observation[]>([]);
+  const [obsCount, setObsCount] = useState(0);
 
   useEffect(() => {
-    api.get<UserProfile>("/api/users/me")
-      .then(setProfile)
+    api.get<UserProfile>("/api/users/me").then(setProfile).catch(() => {});
+    fetch("/api/observations?limit=3")
+      .then((r) => r.json())
+      .then((d) => { setObservations(d.data ?? []); setObsCount(d.meta?.total ?? 0); })
       .catch(() => {});
   }, []);
 
@@ -94,11 +105,11 @@ export default function DashboardPage() {
           <CardContent>
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
-                <p className="text-2xl font-bold">{stats.observations}</p>
+                <p className="text-2xl font-bold">{obsCount}</p>
                 <p className="text-xs text-muted-foreground">Observations</p>
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.posts}</p>
+                <p className="text-2xl font-bold">—</p>
                 <p className="text-xs text-muted-foreground">Posts</p>
               </div>
             </div>
@@ -114,18 +125,34 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center">
               <Star className="mr-2 h-5 w-5 text-yellow-500" />
-              Stargazing Logs
+              Recent Observations
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              No observation logs yet. Use the star map to start recording what you see!
-            </p>
+          <CardContent className="space-y-3">
+            {observations.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No observation logs yet. Use the star map to start recording what you see!
+              </p>
+            ) : (
+              observations.map((obs) => (
+                <div key={obs.id} className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-accent/50">
+                  <div className="min-w-0">
+                    <h4 className="font-medium truncate">{obs.objectName}</h4>
+                    <p className="text-xs text-muted-foreground">{formatObsDate(obs.observedAt)}</p>
+                  </div>
+                  <div className="flex shrink-0">
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <Star key={i} className={`h-3 w-3 ${i < obs.rating ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"}`} />
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
           </CardContent>
           <CardFooter>
             <Button asChild variant="ghost" className="w-full">
-              <Link href="/map">
-                Open Star Map <ArrowRight className="ml-2 h-4 w-4" />
+              <Link href="/profile">
+                View All Logs <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </CardFooter>

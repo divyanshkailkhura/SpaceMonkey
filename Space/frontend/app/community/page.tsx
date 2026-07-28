@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -19,77 +21,204 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowDown, ArrowUp, ImageIcon, MessageSquare, MoreHorizontal, PenSquare, Search, ThumbsUp } from "lucide-react"
+import { ArrowDown, ArrowUp, MessageSquare, MoreHorizontal, PenSquare, Search, Loader2 } from "lucide-react"
+import { api } from "@/lib/api"
 
-// Sample posts data
-const posts = [
-  {
-    id: 1,
-    title: "Captured the Andromeda Galaxy last night!",
-    content:
-      'After months of preparation, I finally got a clear shot of the Andromeda Galaxy (M31). Used my 8" telescope with a DSLR camera. The conditions were perfect with no moon and clear skies.',
-    author: "StarGazer42",
-    avatar: "/placeholder.svg",
-    timestamp: "2 hours ago",
-    upvotes: 128,
-    downvotes: 3,
-    comments: 24,
-    image: "/placeholder.svg?height=400&width=600",
-    tags: ["Astrophotography", "Galaxy"],
-  },
-  {
-    id: 2,
-    title: "Tips for observing the upcoming meteor shower",
-    content:
-      "The Perseids are coming up next month! Here are my top tips for getting the best viewing experience: 1) Find a dark location away from city lights, 2) Bring a comfortable chair or blanket, 3) Allow your eyes at least 20 minutes to adjust to the darkness, 4) Look toward the northeast after midnight for best results.",
-    author: "MeteorHunter",
-    avatar: "/placeholder.svg",
-    timestamp: "Yesterday",
-    upvotes: 95,
-    downvotes: 2,
-    comments: 18,
-    tags: ["Meteor Shower", "Observation Tips"],
-  },
-  {
-    id: 3,
-    title: "Question about telescope eyepieces",
-    content:
-      "I'm new to astronomy and just got my first telescope (8\" Dobsonian). It came with 25mm and 10mm eyepieces, but I'm looking to expand my collection. What would be the next best eyepiece to add to my kit? Looking for something that would give me good planetary views.",
-    author: "NewbieStargazer",
-    avatar: "/placeholder.svg",
-    timestamp: "2 days ago",
-    upvotes: 42,
-    downvotes: 0,
-    comments: 31,
-    tags: ["Equipment", "Question"],
-  },
-  {
-    id: 4,
-    title: "Solar prominence captured during yesterday's observation",
-    content:
-      "Check out this massive solar prominence I captured yesterday using my solar telescope! The Sun has been quite active lately, and this prominence extended almost 50,000 km from the surface. Always remember to use proper solar filters when observing the Sun!",
-    author: "SolarObserver",
-    avatar: "/placeholder.svg",
-    timestamp: "3 days ago",
-    upvotes: 87,
-    downvotes: 1,
-    comments: 12,
-    image: "/placeholder.svg?height=400&width=600",
-    tags: ["Solar", "Astrophotography"],
-  },
+interface PostAuthor {
+  id: string
+  name: string | null
+  avatarUrl: string | null
+}
+
+interface TagInfo {
+  tag: { id: string; name: string }
+}
+
+interface PostData {
+  id: string
+  title: string
+  content: string
+  category: string
+  author: PostAuthor
+  createdAt: string
+  tags: TagInfo[]
+  score: number
+  userVote: "UP" | "DOWN" | null
+  commentCount: number
+}
+
+interface StatsData {
+  members: number
+  posts: number
+}
+
+interface TagData {
+  name: string
+  _count: { posts: number }
+}
+
+interface TopUser {
+  id: string
+  name: string | null
+  avatarUrl: string | null
+  _count: { posts: number }
+}
+
+function getInitials(name: string | null) {
+  if (!name) return "??"
+  return name.substring(0, 2).toUpperCase()
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(dateStr).toLocaleDateString()
+}
+
+const CATEGORY_OPTIONS = [
+  { value: "OBSERVATION", label: "Observation" },
+  { value: "ASTROPHOTOGRAPHY", label: "Astrophotography" },
+  { value: "QUESTION", label: "Question" },
+  { value: "EQUIPMENT", label: "Equipment" },
+  { value: "EVENT", label: "Event" },
+  { value: "OTHER", label: "Other" },
 ]
 
 export default function CommunityPage() {
+  const { data: session } = useSession()
   const [activeTab, setActiveTab] = useState("popular")
-  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [posts, setPosts] = useState<PostData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredPosts = posts.filter(
-    (post) =>
-      post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())),
-  )
+  const [stats, setStats] = useState<StatsData>({ members: 0, posts: 0 })
+  const [popTags, setPopTags] = useState<TagData[]>([])
+  const [topUsers, setTopUsers] = useState<TopUser[]>([])
+
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [createTitle, setCreateTitle] = useState("")
+  const [createContent, setCreateContent] = useState("")
+  const [createCategory, setCreateCategory] = useState("OTHER")
+  const [createTags, setCreateTags] = useState("")
+  const [creating, setCreating] = useState(false)
+
+  const fetchPosts = useCallback(async (sort: string, search: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ sort })
+      if (search) params.set("search", search)
+      const res = await fetch(`/api/posts?${params}`)
+      const json = await res.json()
+      setPosts(json.data)
+    } catch {
+      setError("Failed to load posts")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPosts(activeTab === "popular" ? "recent" : "recent", searchQuery)
+  }, [activeTab, searchQuery, fetchPosts])
+
+  useEffect(() => {
+    api.get<StatsData>("/api/stats").then(setStats).catch(() => {})
+    api.get<TagData[]>("/api/tags").then(setPopTags).catch(() => {})
+    api.get<TopUser[]>("/api/users/top").then(setTopUsers).catch(() => {})
+  }, [])
+
+  const handleCreate = async () => {
+    if (!createTitle.trim() || !createContent.trim()) return
+    setCreating(true)
+    try {
+      const tags = createTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+      await api.post("/api/posts", {
+        title: createTitle,
+        content: createContent,
+        category: createCategory,
+        tags,
+      })
+      setIsCreateOpen(false)
+      setCreateTitle("")
+      setCreateContent("")
+      setCreateCategory("OTHER")
+      setCreateTags("")
+      fetchPosts(activeTab, searchQuery)
+      api.get<StatsData>("/api/stats").then(setStats).catch(() => {})
+    } catch {
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleVote = async (postId: string, type: "UP" | "DOWN") => {
+    if (!session) return
+    const prev = posts.find((p) => p.id === postId)
+    if (!prev) return
+
+    const oldVote = prev.userVote
+    let newVote: "UP" | "DOWN" | null
+    let delta: number
+
+    if (oldVote === type) {
+      newVote = null
+      delta = type === "UP" ? -1 : 1
+    } else if (oldVote === null) {
+      newVote = type
+      delta = type === "UP" ? 1 : -1
+    } else {
+      newVote = type
+      delta = type === "UP" ? 2 : -2
+    }
+
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, score: p.score + delta, userVote: newVote } : p))
+    )
+
+    try {
+      const res = await fetch(`/api/posts/${postId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      })
+      if (!res.ok && res.status !== 409) {
+        setPosts((prev) =>
+          prev.map((p) => (p.id === postId ? { ...p, score: p.score - delta, userVote: oldVote } : p))
+        )
+      }
+      if (res.status === 409) {
+        fetchPosts(activeTab, searchQuery)
+      }
+    } catch {
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, score: p.score - delta, userVote: oldVote } : p))
+      )
+    }
+  }
+
+  const handleDelete = async (postId: string) => {
+    try {
+      await api.delete(`/api/posts/${postId}`)
+      setPosts((prev) => prev.filter((p) => p.id !== postId))
+      api.get<StatsData>("/api/stats").then(setStats).catch(() => {})
+    } catch {
+    }
+  }
+
+  const handleTagClick = (tagName: string) => {
+    setSearchQuery(tagName)
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -108,9 +237,9 @@ export default function CommunityPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={!session}>
                 <PenSquare className="mr-2 h-4 w-4" />
                 New Post
               </Button>
@@ -119,54 +248,39 @@ export default function CommunityPage() {
               <DialogHeader>
                 <DialogTitle>Create New Post</DialogTitle>
                 <DialogDescription>
-                  Share your astronomy experiences, questions, or discoveries with the community.
+                  Share your astronomy experiences, questions, or discoveries.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="title">Title</Label>
-                  <Input id="title" placeholder="Enter a descriptive title" />
+                  <Input id="title" placeholder="Enter a descriptive title" value={createTitle} onChange={(e) => setCreateTitle(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="content">Content</Label>
-                  <Textarea
-                    id="content"
-                    placeholder="Share your thoughts, questions, or observations..."
-                    className="min-h-[150px]"
-                  />
+                  <Textarea id="content" placeholder="Share your thoughts..." className="min-h-[150px]" value={createContent} onChange={(e) => setCreateContent(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
-                  <Select>
+                  <Select value={createCategory} onValueChange={setCreateCategory}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="observation">Observation</SelectItem>
-                      <SelectItem value="astrophotography">Astrophotography</SelectItem>
-                      <SelectItem value="question">Question</SelectItem>
-                      <SelectItem value="equipment">Equipment</SelectItem>
-                      <SelectItem value="event">Event</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      {CATEGORY_OPTIONS.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="image">Image (Optional)</Label>
-                  <div className="flex items-center gap-4">
-                    <Button variant="outline" type="button">
-                      <ImageIcon className="mr-2 h-4 w-4" />
-                      Upload Image
-                    </Button>
-                    <span className="text-sm text-muted-foreground">No file selected</span>
-                  </div>
+                  <Label htmlFor="tags">Tags (comma-separated)</Label>
+                  <Input id="tags" placeholder="Galaxy, Astrophotography" value={createTags} onChange={(e) => setCreateTags(e.target.value)} />
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreatePostOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={() => setIsCreatePostOpen(false)}>Post</Button>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreate} disabled={creating}>{creating ? "Posting..." : "Post"}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -183,82 +297,104 @@ export default function CommunityPage() {
             </TabsList>
           </Tabs>
 
-          {filteredPosts.length > 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : error ? (
+            <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed text-center">
+              <p className="text-muted-foreground">{error}</p>
+              <Button variant="link" onClick={() => fetchPosts(activeTab, searchQuery)}>Retry</Button>
+            </div>
+          ) : posts.length === 0 ? (
+            <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed text-center">
+              <p className="text-muted-foreground">
+                {searchQuery ? "No posts found matching your search" : "No posts yet. Be the first to post!"}
+              </p>
+              {searchQuery && <Button variant="link" onClick={() => setSearchQuery("")}>Clear search</Button>}
+            </div>
+          ) : (
             <div className="space-y-6">
-              {filteredPosts.map((post) => (
+              {posts.map((post) => (
                 <Card key={post.id} className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <Avatar>
-                          <AvatarImage src={post.avatar || "/placeholder.svg"} alt={post.author} />
-                          <AvatarFallback>{post.author.substring(0, 2)}</AvatarFallback>
+                          <AvatarImage src={post.author.avatarUrl ?? "/placeholder.svg"} alt={post.author.name ?? ""} />
+                          <AvatarFallback>{getInitials(post.author.name)}</AvatarFallback>
                         </Avatar>
                         <div>
                           <CardTitle className="text-lg">{post.title}</CardTitle>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span>{post.author}</span>
-                            <span>•</span>
-                            <span>{post.timestamp}</span>
+                            <span>{post.author.name}</span>
+                            <span>·</span>
+                            <span>{timeAgo(post.createdAt)}</span>
                           </div>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
+                      {session?.user?.id === post.author.id && (
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(post.id)}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p>{post.content}</p>
-                    {post.image && (
-                      <div className="overflow-hidden rounded-md">
-                        <img src={post.image || "/placeholder.svg"} alt="Post image" className="w-full object-cover" />
+                    <p className="whitespace-pre-wrap">{post.content}</p>
+                    {post.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {post.tags.map((t) => (
+                          <Badge
+                            key={t.tag.id}
+                            variant="outline"
+                            className="cursor-pointer border-purple-500 text-purple-500 hover:bg-purple-500/10"
+                            onClick={() => handleTagClick(t.tag.name)}
+                          >
+                            {t.tag.name}
+                          </Badge>
+                        ))}
                       </div>
                     )}
-                    <div className="flex flex-wrap gap-2">
-                      {post.tags.map((tag, i) => (
-                        <Badge key={i} variant="outline" className="border-purple-500 text-purple-500">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
                   </CardContent>
                   <CardFooter className="flex items-center justify-between">
                     <div className="flex items-center gap-6">
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <ArrowUp className="h-4 w-4" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleVote(post.id, "UP")}
+                          disabled={!session}
+                        >
+                          <ArrowUp className={`h-4 w-4 ${post.userVote === "UP" ? "text-purple-500" : ""}`} />
                         </Button>
-                        <span>{post.upvotes - post.downvotes}</span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <ArrowDown className="h-4 w-4" />
+                        <span className="text-sm min-w-[2rem] text-center font-medium">{post.score}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleVote(post.id, "DOWN")}
+                          disabled={!session}
+                        >
+                          <ArrowDown className={`h-4 w-4 ${post.userVote === "DOWN" ? "text-purple-500" : ""}`} />
                         </Button>
                       </div>
-                      <Button variant="ghost" size="sm" className="gap-1">
-                        <MessageSquare className="h-4 w-4" />
-                        {post.comments} Comments
+                      <Button variant="ghost" size="sm" className="gap-1" asChild>
+                        <Link href={`/community/${post.id}`}>
+                          <MessageSquare className="h-4 w-4" />
+                          {post.commentCount} Comments
+                        </Link>
                       </Button>
                     </div>
-                    <Button variant="ghost" size="sm" className="gap-1">
-                      <ThumbsUp className="h-4 w-4" />
-                      Save
-                    </Button>
                   </CardFooter>
                 </Card>
               ))}
-            </div>
-          ) : (
-            <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed text-center">
-              <p className="text-muted-foreground">No posts found matching your search</p>
-              <Button variant="link" onClick={() => setSearchQuery("")}>
-                Clear search
-              </Button>
             </div>
           )}
         </div>
 
         <div className="space-y-6">
-          {/* Community Stats */}
           <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle>Community Stats</CardTitle>
@@ -266,84 +402,62 @@ export default function CommunityPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-center">
                 <div>
-                  <p className="text-2xl font-bold">12.4k</p>
+                  <p className="text-2xl font-bold">{stats.members}</p>
                   <p className="text-xs text-muted-foreground">Members</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">1.2k</p>
-                  <p className="text-xs text-muted-foreground">Online</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">45.6k</p>
+                  <p className="text-2xl font-bold">{stats.posts}</p>
                   <p className="text-xs text-muted-foreground">Posts</p>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">324</p>
-                  <p className="text-xs text-muted-foreground">Today</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {popTags.length > 0 && (
+            <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle>Popular Tags</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {popTags.map((tag) => (
+                    <Badge
+                      key={tag.name}
+                      variant="outline"
+                      className="cursor-pointer border-purple-500 text-purple-500 hover:bg-purple-500/10"
+                      onClick={() => handleTagClick(tag.name)}
+                    >
+                      {tag.name}
+                    </Badge>
+                  ))}
                 </div>
-              </div>
-              <Button className="w-full">Join Community</Button>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Popular Tags */}
-          <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle>Popular Tags</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "Astrophotography",
-                  "Telescope",
-                  "Planets",
-                  "Galaxies",
-                  "Meteor Shower",
-                  "Solar",
-                  "Equipment",
-                  "Beginner",
-                  "Deep Sky",
-                  "Observation",
-                ].map((tag, i) => (
-                  <Badge
-                    key={i}
-                    variant="outline"
-                    className="cursor-pointer border-purple-500 text-purple-500 hover:bg-purple-500/10"
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Top Contributors */}
-          <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle>Top Contributors</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {["CosmicExplorer", "GalaxyHunter", "StarGazer42", "AstroEnthusiast", "NebulaObserver"].map(
-                  (user, i) => (
-                    <div key={i} className="flex items-center gap-3">
+          {topUsers.length > 0 && (
+            <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle>Top Contributors</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {topUsers.map((user) => (
+                    <div key={user.id} className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src="/placeholder.svg" />
-                        <AvatarFallback>{user.substring(0, 2)}</AvatarFallback>
+                        <AvatarImage src={user.avatarUrl ?? "/placeholder.svg"} />
+                        <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <p className="text-sm font-medium">{user}</p>
-                        <p className="text-xs text-muted-foreground">{100 - i * 15} contributions</p>
+                        <p className="text-sm font-medium">{user.name}</p>
+                        <p className="text-xs text-muted-foreground">{user._count.posts} posts</p>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        Follow
-                      </Button>
                     </div>
-                  ),
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
