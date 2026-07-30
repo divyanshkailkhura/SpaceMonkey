@@ -1,16 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DEFAULT_LOCATION } from "../constants";
 import type { ObserverLocation } from "../types";
 
-/**
- * Owns the "where is the observer standing" state: manual lat/lon/name
- * fields, browser geolocation + reverse geocoding, and city-name search.
- * Deliberately knows nothing about the Stellarium engine — pushing this
- * state into the engine is `useSyncObserverLocation`'s job, so this hook
- * stays testable without a WASM engine in the loop.
- */
+const STORAGE_KEY = "spacemonkey-location";
+
+function loadCachedLocation(): ObserverLocation {
+  if (typeof window === "undefined") return DEFAULT_LOCATION;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (
+        typeof parsed.latitude === "number" &&
+        typeof parsed.longitude === "number" &&
+        typeof parsed.name === "string"
+      ) {
+        return { ...parsed, altitude: parsed.altitude ?? 10 };
+      }
+    }
+  } catch {}
+  return DEFAULT_LOCATION;
+}
+
+function saveLocation(loc: ObserverLocation) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(loc));
+  } catch {}
+}
+
 export function useObserverLocation() {
-  const [location, setLocation] = useState<ObserverLocation>(DEFAULT_LOCATION);
+  const [location, setLocation] = useState<ObserverLocation>(loadCachedLocation);
   const [cityQuery, setCityQuery] = useState("");
   const [citySearching, setCitySearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,9 +39,9 @@ export function useObserverLocation() {
     setLocation((prev) => ({ ...prev, [name]: name === "name" ? value : Number(value) }));
   };
 
-  const handleGeolocation = () => {
+  const handleGeolocation = (silent = false) => {
     if (!navigator.geolocation) {
-      setError("Geolocation not supported on this device");
+      if (!silent) setError("Geolocation not supported on this device");
       return;
     }
 
@@ -39,14 +58,26 @@ export function useObserverLocation() {
             data.address?.village ||
             data.address?.hamlet ||
             "Unnamed place";
-          setLocation({ name: nice, latitude: coords.latitude, longitude: coords.longitude, altitude: 10 });
+          const loc: ObserverLocation = { name: nice, latitude: coords.latitude, longitude: coords.longitude, altitude: 10 };
+          setLocation(loc);
+          saveLocation(loc);
         } catch {
-          setLocation({ name: "My Location", latitude: coords.latitude, longitude: coords.longitude, altitude: 10 });
+          const loc: ObserverLocation = { name: "My Location", latitude: coords.latitude, longitude: coords.longitude, altitude: 10 };
+          setLocation(loc);
+          saveLocation(loc);
         }
       },
-      () => setError("Location access denied")
+      () => {
+        if (!silent) setError("Location access denied");
+      }
     );
   };
+
+  useEffect(() => {
+    if (!localStorage.getItem(STORAGE_KEY)) {
+      handleGeolocation(true);
+    }
+  }, []);
 
   const handleCitySearch = async () => {
     if (!cityQuery.trim()) return;
@@ -60,12 +91,14 @@ export function useObserverLocation() {
         setError("City not found");
         return;
       }
-      setLocation({
+      const loc: ObserverLocation = {
         name: match.display_name,
         latitude: parseFloat(match.lat),
         longitude: parseFloat(match.lon),
         altitude: 10,
-      });
+      };
+      setLocation(loc);
+      saveLocation(loc);
       setCityQuery("");
     } catch {
       setError("Failed to fetch city");
