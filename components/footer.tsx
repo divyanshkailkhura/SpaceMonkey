@@ -37,8 +37,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/community" className="text-muted-foreground hover:text-foreground">
-                  Community
+                <Link href="/search" className="text-muted-foreground hover:text-foreground">
+                  Discover
                 </Link>
               </li>
             </ul>

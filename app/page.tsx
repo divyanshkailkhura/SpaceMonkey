@@ -54,7 +54,7 @@ export default async function HomePage() {
             variant="outline"
             className="border-purple-600 text-purple-600 hover:bg-purple-600/10"
           >
-            <Link href="/community">Join Community</Link>
+            <Link href="/search">Discover Communities</Link>
           </Button>
         </div>
       </section>

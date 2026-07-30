@@ -1,17 +1,39 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = await getDb();
+  const session = await getServerSession(authOptions);
+  const { searchParams } = req.nextUrl;
+  const search = searchParams.get("search")?.trim();
+
+  const where = search
+    ? { displayName: { contains: search, mode: "insensitive" as const } }
+    : {};
 
   const communities = await db.community.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { members: true, posts: true } },
     },
   });
+
+  const communityIds = communities.map((c) => c.id);
+
+  let memberships: Map<string, boolean> = new Map();
+  if (session?.user?.id && communityIds.length > 0) {
+    const rows = await db.communityMember.findMany({
+      where: {
+        userId: session.user.id,
+        communityId: { in: communityIds },
+      },
+      select: { communityId: true },
+    });
+    memberships = new Map(rows.map((r) => [r.communityId, true]));
+  }
 
   return NextResponse.json({
     data: communities.map((c) => ({
@@ -23,6 +45,7 @@ export async function GET() {
       createdAt: c.createdAt,
       memberCount: c._count.members,
       postCount: c._count.posts,
+      joined: memberships.has(c.id),
     })),
   });
 }

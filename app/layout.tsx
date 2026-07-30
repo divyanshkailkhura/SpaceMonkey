@@ -3,6 +3,7 @@ import { ThemeProvider } from "../components/theme-provider"
 import { SessionProvider } from "../components/session-provider"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
+import { SearchProvider } from "@/components/SearchProvider"
 import "@/app/globals.css"
 
 export default function RootLayout({
@@ -19,11 +20,13 @@ export default function RootLayout({
       <body className="min-h-screen bg-background font-sans antialiased">
         <SessionProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-            <div className="relative flex min-h-screen flex-col">
-              <Navbar />
-              <div className="flex-1">{children}</div>
-              <Footer />
-            </div>
+            <SearchProvider>
+              <div className="relative flex min-h-screen flex-col">
+                <Navbar />
+                <div className="flex-1">{children}</div>
+                <Footer />
+              </div>
+            </SearchProvider>
           </ThemeProvider>
         </SessionProvider>
       </body>

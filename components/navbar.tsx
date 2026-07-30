@@ -6,19 +6,29 @@ import { useSession, signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { Menu, Telescope, LogOut, User } from "lucide-react"
+import { Menu, Telescope, LogOut, User, Search } from "lucide-react"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
   const { data: session } = useSession()
 
   const navigation = [
-    { name: "Home", href: "/" },
     { name: "Star Map", href: "/map" },
     { name: "Events", href: "/events" },
-    { name: "Community", href: "/community" },
-    { name: "Dashboard", href: "/dashboard" },
+    { name: "Discover", href: "/search" },
   ]
+
+  const openSearch = () => {
+    const isMac = navigator.platform.toUpperCase().includes("MAC")
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "k",
+        metaKey: isMac,
+        ctrlKey: !isMac,
+        bubbles: true,
+      })
+    )
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-purple-800/20 bg-background/80 backdrop-blur-md">
@@ -43,6 +53,15 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center space-x-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={openSearch}
+            title="Discover (Cmd+K)"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
           <ThemeToggle />
 
           {session?.user ? (
