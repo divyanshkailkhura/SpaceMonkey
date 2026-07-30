@@ -43,6 +43,13 @@ There is **no** `npm test` or `npm run typecheck`. Lint is the only code-quality
 | `lib/auth.ts` | NextAuth config with credentials provider |
 | `middleware.ts` | Protects `/dashboard` and `/profile` via next-auth middleware |
 
+## Deployment
+- **Hosting**: Render (auto-deploys on push to `main`). Build command is `npm run build`.
+- **Database**: Neon PostgreSQL. Production DB URL is set via `DATABASE_URL` env var in Render dashboard.
+- **Migrations**: Applied automatically during build via `prisma migrate deploy && prisma generate` (runs before `next build`). Only unapplied migrations are ever executed — safe for production.
+- **Env vars required by build**: `DATABASE_URL` (Neon prod pooler URL), `NEXTAUTH_SECRET`, `NEXTAUTH_URL`. These must be set in Render dashboard and available during the build phase.
+- **Prisma client**: Regenerated every build. Local dev also generates on `npm install` via `postinstall`.
+
 ## Conventions
 - `@/*` path alias maps to the frontend root (e.g. `@/components/ui/button`)
 - Dark theme is the default (set in `layout.tsx` via `next-themes`)
