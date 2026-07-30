@@ -24,6 +24,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowDown, ArrowUp, MessageSquare, MoreHorizontal, PenSquare, Search, Loader2 } from "lucide-react"
 import { api } from "@/lib/api"
+import { CommunityBadge } from "@/components/community/CommunityBadge"
+import { FollowButton } from "@/components/community/FollowButton"
+import { CommunitySidebar } from "@/components/community/CommunitySidebar"
+import { CreateCommunityDialog } from "@/components/community/CreateCommunityDialog"
 
 interface PostAuthor {
   id: string
@@ -46,6 +50,7 @@ interface PostData {
   score: number
   userVote: "UP" | "DOWN" | null
   commentCount: number
+  community: { id: string; slug: string; displayName: string } | null
 }
 
 interface StatsData {
@@ -112,13 +117,21 @@ export default function CommunityPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState("")
 
-  const fetchPosts = useCallback(async (sort: string, search: string) => {
+  const [createCommOpen, setCreateCommOpen] = useState(false)
+
+  const fetchPosts = useCallback(async (tab: string, search: string) => {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ sort })
-      if (search) params.set("search", search)
-      const res = await fetch(`/api/posts?${params}`)
+      let url: string
+      if (tab === "following") {
+        url = "/api/posts/following"
+      } else {
+        const params = new URLSearchParams({ sort: tab === "popular" ? "popular" : "recent" })
+        if (search) params.set("search", search)
+        url = `/api/posts?${params}`
+      }
+      const res = await fetch(url)
       const json = await res.json()
       setPosts(json.data)
     } catch {
@@ -129,7 +142,7 @@ export default function CommunityPage() {
   }, [])
 
   useEffect(() => {
-    fetchPosts(activeTab === "popular" ? "recent" : "recent", searchQuery)
+    fetchPosts(activeTab, searchQuery)
   }, [activeTab, searchQuery, fetchPosts])
 
   useEffect(() => {
@@ -328,16 +341,26 @@ export default function CommunityPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={post.author.avatarUrl ?? "/placeholder.svg"} alt={post.author.name ?? ""} />
-                          <AvatarFallback>{getInitials(post.author.name)}</AvatarFallback>
-                        </Avatar>
+                        <Link href={`/profile/${post.author.id}`}>
+                          <Avatar>
+                            <AvatarImage src={post.author.avatarUrl ?? "/placeholder.svg"} alt={post.author.name ?? ""} />
+                            <AvatarFallback>{getInitials(post.author.name)}</AvatarFallback>
+                          </Avatar>
+                        </Link>
                         <div>
                           <CardTitle className="text-lg">{post.title}</CardTitle>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span>{post.author.name}</span>
+                            <Link href={`/profile/${post.author.id}`} className="hover:text-white">
+                              {post.author.name}
+                            </Link>
                             <span>·</span>
                             <span>{timeAgo(post.createdAt)}</span>
+                            {post.community && (
+                              <>
+                                <span>·</span>
+                                <CommunityBadge id={post.community.id} slug={post.community.slug} displayName={post.community.displayName} />
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -403,6 +426,8 @@ export default function CommunityPage() {
         </div>
 
         <div className="space-y-6">
+          <CommunitySidebar onCreateClick={() => setCreateCommOpen(true)} />
+
           <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle>Community Stats</CardTitle>
@@ -452,14 +477,19 @@ export default function CommunityPage() {
                 <div className="space-y-4">
                   {topUsers.map((user) => (
                     <div key={user.id} className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.avatarUrl ?? "/placeholder.svg"} />
-                        <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                      </Avatar>
+                      <Link href={`/profile/${user.id}`}>
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={user.avatarUrl ?? "/placeholder.svg"} />
+                          <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                        </Avatar>
+                      </Link>
                       <div className="flex-1">
-                        <p className="text-sm font-medium">{user.name}</p>
+                        <Link href={`/profile/${user.id}`} className="text-sm font-medium hover:text-white">
+                          {user.name}
+                        </Link>
                         <p className="text-xs text-muted-foreground">{user._count.posts} posts</p>
                       </div>
+                      <FollowButton userId={user.id} initialFollowing={false} />
                     </div>
                   ))}
                 </div>
@@ -468,6 +498,13 @@ export default function CommunityPage() {
           )}
         </div>
       </div>
+      <CreateCommunityDialog
+        open={createCommOpen}
+        onOpenChange={setCreateCommOpen}
+        onCreated={() => {
+          api.get<StatsData>("/api/stats").then(setStats).catch(() => {});
+        }}
+      />
       </div>
   )
 }

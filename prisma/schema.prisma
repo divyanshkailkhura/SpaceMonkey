@@ -18,12 +18,16 @@ model User {
   role         String   @default("user")
   createdAt    DateTime @default(now())
 
-  posts        Post[]
-  comments     Comment[]
-  votes        PostVote[]
-  observations Observation[]
-  favorites    FavoriteObject[]
-  sessions     Session[]
+  posts                Post[]
+  comments             Comment[]
+  votes                PostVote[]
+  observations         Observation[]
+  favorites            FavoriteObject[]
+  sessions             Session[]
+  communities          Community[]
+  communityMemberships CommunityMember[]
+  following            Follow[] @relation("UserFollowing")
+  followers            Follow[] @relation("UserFollowed")
 }
 
 model Session {
@@ -32,6 +36,33 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  displayName String
+  description String?
+  bannerUrl   String?
+  creatorId   String
+  createdAt   DateTime @default(now())
+
+  creator User              @relation(fields: [creatorId], references: [id])
+  members CommunityMember[]
+  posts   Post[]
+}
+
+model CommunityMember {
+  id          String   @id @default(cuid())
+  communityId String
+  userId      String
+  role        String   @default("MEMBER")
+  joinedAt    DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
 }
 
 enum PostCategory {
@@ -44,15 +75,17 @@ enum PostCategory {
 }
 
 model Post {
-  id        String       @id @default(cuid())
-  title     String
-  content   String
-  imageUrl  String?
-  category  PostCategory @default(OTHER)
-  authorId  String
-  author    User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id          String       @id @default(cuid())
+  title       String
+  content     String
+  imageUrl    String?
+  category    PostCategory @default(OTHER)
+  communityId String?
+  community   Community?   @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   comments Comment[]
   votes    PostVote[]
@@ -83,6 +116,18 @@ model PostVote {
   type   VoteType
 
   @@unique([postId, userId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowed", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
 }
 
 model Observation {

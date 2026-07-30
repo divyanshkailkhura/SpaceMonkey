@@ -16,6 +16,7 @@ export async function GET(
     include: {
       author: { select: { id: true, name: true, avatarUrl: true } },
       tags: { include: { tag: true } },
+      community: { select: { id: true, slug: true, displayName: true } },
       comments: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -66,14 +67,28 @@ export async function DELETE(
   const { id } = await params;
   const db = await getDb();
 
-  const post = await db.post.findUnique({ where: { id } });
+  const post = await db.post.findUnique({
+    where: { id },
+    include: { community: { select: { id: true } } },
+  });
   if (!post) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
-  if (post.authorId !== session.user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  if (post.authorId === session.user.id) {
+    await db.post.delete({ where: { id } });
+    return NextResponse.json({ data: null });
   }
 
-  await db.post.delete({ where: { id } });
-  return NextResponse.json({ data: null });
+  if (post.community?.id) {
+    const membership = await db.communityMember.findUnique({
+      where: { communityId_userId: { communityId: post.community.id, userId: session.user.id } },
+    });
+    if (membership?.role === "MODERATOR") {
+      await db.post.delete({ where: { id } });
+      return NextResponse.json({ data: null });
+    }
+  }
+
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
