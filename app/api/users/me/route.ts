@@ -12,14 +12,37 @@ export async function GET() {
   const db = await getDb();
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, email: true, name: true, avatarUrl: true, bio: true, location: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      avatarUrl: true,
+      bio: true,
+      location: true,
+      createdAt: true,
+      _count: { select: { posts: true, observations: true } },
+    },
   });
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: user });
+  const [followerCount, followingCount] = await Promise.all([
+    db.follow.count({ where: { followingId: user.id } }),
+    db.follow.count({ where: { followerId: user.id } }),
+  ]);
+
+  return NextResponse.json({
+    data: {
+      ...user,
+      followerCount,
+      followingCount,
+      postCount: user._count.posts,
+      observationCount: user._count.observations,
+      _count: undefined,
+    },
+  });
 }
 
 export async function PATCH(req: Request) {

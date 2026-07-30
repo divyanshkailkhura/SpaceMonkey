@@ -10,8 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Telescope, Star, UserPlus, UserMinus, Loader2, ArrowLeft } from "lucide-react";
+import { Telescope, Star, UserPlus, UserMinus, Loader2, ArrowLeft, FileText } from "lucide-react";
 import { api } from "@/lib/api";
+import { FollowersDialog } from "@/components/profile/FollowersDialog";
 
 interface UserProfile {
   id: string;
@@ -27,26 +28,35 @@ interface UserProfile {
   isFollowing: boolean;
 }
 
-interface PostAuthor {
-  id: string;
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-interface TagInfo {
-  tag: { id: string; name: string };
-}
-
 interface PostData {
   id: string;
   title: string;
   content: string;
-  author: PostAuthor;
+  author: { id: string; name: string | null; avatarUrl: string | null };
   createdAt: string;
-  tags: TagInfo[];
+  tags: { tag: { id: string; name: string } }[];
   score: number;
   commentCount: number;
   community?: { id: string; slug: string; displayName: string } | null;
+}
+
+interface Observation {
+  id: string;
+  objectName: string;
+  objectType: string | null;
+  constellation: string | null;
+  description: string | null;
+  rating: number;
+  observedAt: string;
+}
+
+interface CommunityMembership {
+  id: string;
+  slug: string;
+  displayName: string;
+  description: string | null;
+  role: string;
+  joinedAt: string;
 }
 
 function getInitials(name: string | null) {
@@ -70,6 +80,14 @@ function formatMemberDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+function formatObsDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function PublicProfilePage() {
   const params = useParams<{ id: string }>();
   const userId = params.id;
@@ -85,6 +103,12 @@ export default function PublicProfilePage() {
   const [activeTab, setActiveTab] = useState("posts");
   const [posts, setPosts] = useState<PostData[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
+  const [observations, setObservations] = useState<Observation[]>([]);
+  const [obsLoading, setObsLoading] = useState(false);
+  const [communities, setCommunities] = useState<CommunityMembership[]>([]);
+  const [communitiesLoading, setCommunitiesLoading] = useState(false);
+  const [followersOpen, setFollowersOpen] = useState(false);
+  const [followingOpen, setFollowingOpen] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -101,23 +125,52 @@ export default function PublicProfilePage() {
   const fetchPosts = useCallback(async () => {
     setPostsLoading(true);
     try {
-      const res = await fetch(`/api/posts/following?page=1`);
+      const res = await fetch(`/api/users/${userId}/posts`);
       if (res.ok) {
         const json = await res.json();
-        const userPosts = (json.data || []).filter(
-          (p: PostData) => p.author.id === userId
-        );
-        setPosts(userPosts);
+        setPosts(json.data || []);
       }
     } catch {} finally {
       setPostsLoading(false);
     }
   }, [userId]);
 
+  const fetchObservations = useCallback(async () => {
+    setObsLoading(true);
+    try {
+      const res = await fetch(`/api/users/${userId}/observations`);
+      if (res.ok) {
+        const json = await res.json();
+        setObservations(json.data || []);
+      }
+    } catch {} finally {
+      setObsLoading(false);
+    }
+  }, [userId]);
+
+  const fetchCommunities = useCallback(async () => {
+    setCommunitiesLoading(true);
+    try {
+      const res = await fetch(`/api/users/${userId}/communities`);
+      if (res.ok) {
+        const json = await res.json();
+        setCommunities(json.data || []);
+      }
+    } catch {} finally {
+      setCommunitiesLoading(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
     fetchProfile();
-    fetchPosts();
-  }, [fetchProfile, fetchPosts]);
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    if (!profile) return;
+    if (activeTab === "posts") fetchPosts();
+    if (activeTab === "observations") fetchObservations();
+    if (activeTab === "communities") fetchCommunities();
+  }, [activeTab, profile, fetchPosts, fetchObservations, fetchCommunities]);
 
   const handleFollowToggle = async () => {
     if (!session) {
@@ -181,14 +234,14 @@ export default function PublicProfilePage() {
               </p>
 
               <div className="mt-4 flex gap-4 text-center">
-                <div>
+                <button onClick={() => setFollowersOpen(true)} className="cursor-pointer text-center hover:text-purple-400">
                   <p className="text-lg font-bold">{profile.followerCount}</p>
                   <p className="text-xs text-muted-foreground">Followers</p>
-                </div>
-                <div>
+                </button>
+                <button onClick={() => setFollowingOpen(true)} className="cursor-pointer text-center hover:text-purple-400">
                   <p className="text-lg font-bold">{profile.followingCount}</p>
                   <p className="text-xs text-muted-foreground">Following</p>
-                </div>
+                </button>
               </div>
 
               <div className="mt-4 flex gap-4 text-center text-sm text-muted-foreground">
@@ -227,6 +280,7 @@ export default function PublicProfilePage() {
             <TabsList>
               <TabsTrigger value="posts">Posts</TabsTrigger>
               <TabsTrigger value="observations">Observations</TabsTrigger>
+              <TabsTrigger value="communities">Communities</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -275,27 +329,89 @@ export default function PublicProfilePage() {
           )}
 
           {activeTab === "observations" && (
-            <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed text-center">
-              <Star className="mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                {isOwn ? "Log observations from the star map!" : `${profile.name ?? "User"} hasn't logged any observations yet.`}
-              </p>
+            <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <h3 className="text-xl font-semibold mb-4">Observations</h3>
+                {obsLoading ? (
+                  <p className="text-muted-foreground">Loading...</p>
+                ) : observations.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    {isOwn ? "Log observations from the star map!" : `${profile.name ?? "User"} hasn't logged any observations yet.`}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {observations.map((obs) => (
+                      <div key={obs.id} className="flex items-center gap-4 rounded-lg border border-border p-3">
+                        <Telescope className="h-6 w-6 text-purple-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{obs.objectName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[obs.objectType, obs.constellation].filter(Boolean).join(" · ")}
+                            {" · "}{formatObsDate(obs.observedAt)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0">
+                          {Array.from({ length: 5 }, (_, i) => (
+                            <Star
+                              key={i}
+                              className={`h-3 w-3 ${i < obs.rating ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "communities" && (
+            <div className="space-y-2">
+              {communitiesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : communities.length === 0 ? (
+                <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed text-center">
+                  <p className="text-muted-foreground">Not a member of any communities yet.</p>
+                </div>
+              ) : (
+                communities.map((c) => (
+                  <Link key={c.id} href={`/c/${c.slug}`}>
+                    <Card className="border-purple-800/20 bg-card/50 backdrop-blur-sm transition-colors hover:bg-accent">
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <p className="font-medium">c/{c.displayName}</p>
+                          {c.description && (
+                            <p className="mt-1 text-sm text-muted-foreground line-clamp-1">{c.description}</p>
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="shrink-0">
+                          {c.role === "MODERATOR" ? "Moderator" : "Member"}
+                        </Badge>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))
+              )}
             </div>
           )}
         </div>
       </div>
-    </div>
-  );
-}
 
-function FileText({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-      <path d="M10 9H8" />
-      <path d="M16 13H8" />
-      <path d="M16 17H8" />
-    </svg>
+      <FollowersDialog
+        open={followersOpen}
+        onOpenChange={setFollowersOpen}
+        userId={profile.id}
+        mode="followers"
+      />
+      <FollowersDialog
+        open={followingOpen}
+        onOpenChange={setFollowingOpen}
+        userId={profile.id}
+        mode="following"
+      />
+    </div>
   );
 }
