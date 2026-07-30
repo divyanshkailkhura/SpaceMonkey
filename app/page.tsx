@@ -1,16 +1,31 @@
-import type React from "react"
 import type { Metadata } from "next"
+import type React from "react"
 import Link from "next/link"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Compass, Calendar, BookOpen, Users, ArrowRight } from "lucide-react"
 import { StarBackground } from "@/components/star-background"
+import { HomeFeed } from "@/components/HomeFeed"
 
-export const metadata: Metadata = {
-  title: "SpaceMonkey - Explore the Cosmos",
+export const dynamic = "force-dynamic"
+
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await getServerSession(authOptions)
+  if (session?.user) {
+    return { title: "Home - SpaceMonkey" }
+  }
+  return { title: "SpaceMonkey - Explore the Cosmos" }
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await getServerSession(authOptions)
+
+  if (session?.user) {
+    return <HomeFeed />
+  }
+
   return (
     <div className="relative">
       <StarBackground />

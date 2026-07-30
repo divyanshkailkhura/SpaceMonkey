@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
 import { usePageTitle } from "@/lib/page-title"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PenSquare, Search, Loader2 } from "lucide-react"
+import { Loader2, PenSquare } from "lucide-react"
 import { api } from "@/lib/api"
 import { PostCard } from "@/components/community/PostCard"
 import { CreatePostDialog } from "@/components/community/CreatePostDialog"
@@ -14,11 +13,10 @@ import { FeedSidebar } from "@/components/community/FeedSidebar"
 import { CreateCommunityDialog } from "@/components/community/CreateCommunityDialog"
 import type { PostData } from "@/lib/shared-types"
 
-export default function CommunityPage() {
-  usePageTitle("Community - SpaceMonkey")
+export function HomeFeed() {
+  usePageTitle("Home - SpaceMonkey")
   const { data: session } = useSession()
-  const [activeTab, setActiveTab] = useState("popular")
-  const [searchQuery, setSearchQuery] = useState("")
+
   const [posts, setPosts] = useState<PostData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,19 +24,11 @@ export default function CommunityPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [createCommOpen, setCreateCommOpen] = useState(false)
 
-  const fetchPosts = useCallback(async (tab: string, search: string) => {
+  const fetchPosts = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      let url: string
-      if (tab === "following") {
-        url = "/api/posts/following"
-      } else {
-        const params = new URLSearchParams({ sort: tab === "popular" ? "popular" : "recent" })
-        if (search) params.set("search", search)
-        url = `/api/posts?${params}`
-      }
-      const res = await fetch(url)
+      const res = await fetch("/api/posts/following")
       const json = await res.json()
       setPosts(json.data)
     } catch {
@@ -49,8 +39,8 @@ export default function CommunityPage() {
   }, [])
 
   useEffect(() => {
-    fetchPosts(activeTab, searchQuery)
-  }, [activeTab, searchQuery, fetchPosts])
+    fetchPosts()
+  }, [fetchPosts])
 
   const handleVote = async (postId: string, type: "UP" | "DOWN") => {
     if (!session) return
@@ -88,7 +78,7 @@ export default function CommunityPage() {
         )
       }
       if (res.status === 409) {
-        fetchPosts(activeTab, searchQuery)
+        fetchPosts()
       }
     } catch {
       setPosts((prev) =>
@@ -105,48 +95,29 @@ export default function CommunityPage() {
   }
 
   const handleTagClick = (tagName: string) => {
-    setSearchQuery(tagName)
+    window.location.href = `/community?search=${encodeURIComponent(tagName)}`
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Community</h1>
-          <p className="text-muted-foreground">Connect with fellow astronomy enthusiasts</p>
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Home</h1>
+          <p className="text-muted-foreground">Your personal astronomy feed</p>
         </div>
-        <div className="flex w-full items-center gap-2 md:w-auto">
-          <div className="relative flex-1 md:w-64 md:flex-none">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search posts..."
-              className="pl-8"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <Button disabled={!session} onClick={() => setIsCreateOpen(true)}>
-            <PenSquare className="mr-2 h-4 w-4" />
-            New Post
-          </Button>
-          <CreatePostDialog
-            open={isCreateOpen}
-            onOpenChange={setIsCreateOpen}
-            onPostCreated={() => fetchPosts(activeTab, searchQuery)}
-          />
-        </div>
+        <Button disabled={!session} onClick={() => setIsCreateOpen(true)}>
+          <PenSquare className="mr-2 h-4 w-4" />
+          New Post
+        </Button>
+        <CreatePostDialog
+          open={isCreateOpen}
+          onOpenChange={setIsCreateOpen}
+          onPostCreated={fetchPosts}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="popular">Popular</TabsTrigger>
-              <TabsTrigger value="recent">Recent</TabsTrigger>
-              <TabsTrigger value="following">Following</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -154,14 +125,16 @@ export default function CommunityPage() {
           ) : error ? (
             <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed text-center">
               <p className="text-muted-foreground">{error}</p>
-              <Button variant="link" onClick={() => fetchPosts(activeTab, searchQuery)}>Retry</Button>
+              <Button variant="link" onClick={fetchPosts}>Retry</Button>
             </div>
           ) : posts.length === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed text-center">
               <p className="text-muted-foreground">
-                {searchQuery ? "No posts found matching your search" : "No posts yet. Be the first to post!"}
+                Follow stargazers to see their posts here!
               </p>
-              {searchQuery && <Button variant="link" onClick={() => setSearchQuery("")}>Clear search</Button>}
+              <Link href="/community">
+                <Button variant="link">Discover the community</Button>
+              </Link>
             </div>
           ) : (
             <div className="space-y-6">
@@ -193,4 +166,3 @@ export default function CommunityPage() {
     </div>
   )
 }
-
