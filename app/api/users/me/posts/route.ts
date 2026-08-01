@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { attachScore } from "@/utils/postScore";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -32,26 +33,7 @@ export async function GET(req: Request) {
     db.post.count({ where }),
   ]);
 
-  const data = await Promise.all(
-    posts.map(async (post) => {
-      const [upvotes, downvotes] = await Promise.all([
-        db.postVote.count({ where: { postId: post.id, type: "UP" } }),
-        db.postVote.count({ where: { postId: post.id, type: "DOWN" } }),
-      ]);
-
-      const vote = await db.postVote.findUnique({
-        where: { postId_userId: { postId: post.id, userId: session.user.id } },
-      });
-
-      return {
-        ...post,
-        score: upvotes - downvotes,
-        userVote: vote?.type ?? null,
-        commentCount: post._count.comments,
-        _count: undefined,
-      };
-    })
-  );
+  const data = await attachScore(db, posts, session.user.id);
 
   return NextResponse.json({
     data,

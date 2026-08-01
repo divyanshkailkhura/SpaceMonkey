@@ -2,40 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { attachScore } from "@/utils/postScore";
 import type { Prisma } from "@/generated/prisma/client";
-
-interface PostRow {
-  id: string;
-  _count: { comments: number };
-  [key: string]: unknown;
-}
-
-async function attachScore(db: Awaited<ReturnType<typeof getDb>>, posts: PostRow[], userId: string | undefined) {
-  return Promise.all(
-    posts.map(async (post) => {
-      const [upvotes, downvotes] = await Promise.all([
-        db.postVote.count({ where: { postId: post.id, type: "UP" } }),
-        db.postVote.count({ where: { postId: post.id, type: "DOWN" } }),
-      ]);
-
-      let userVote: string | null = null;
-      if (userId) {
-        const vote = await db.postVote.findUnique({
-          where: { postId_userId: { postId: post.id, userId } },
-        });
-        userVote = vote?.type ?? null;
-      }
-
-      return {
-        ...post,
-        score: upvotes - downvotes,
-        userVote,
-        commentCount: post._count.comments,
-        _count: undefined,
-      };
-    })
-  );
-}
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
