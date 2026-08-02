@@ -1,13 +1,17 @@
-import "dotenv/config";
-
 import dotenv from "dotenv";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: resolve(__dirname, "..", ".env") });
-dotenv.config({ path: resolve(__dirname, "..", ".env.development"), override: true });
-dotenv.config({ path: resolve(__dirname, "..", ".env.local"), override: true });
+// `quiet: true` keeps dotenv's logging off stdout. This script's stdout is
+// captured with `export SESSION_TOKEN=$(node scripts/get-session-token.js)`,
+// so ANY extra line corrupts the token (dotenv's "◇ injected env" log contains
+// a UTF-8 multibyte ◇ = byte 0xE2, which k6/Go then drops from the cookie,
+// silently 401ing every authenticated request). The token (console.log below)
+// must be the ONLY line written to stdout.
+dotenv.config({ path: resolve(__dirname, "..", ".env"), quiet: true });
+dotenv.config({ path: resolve(__dirname, "..", ".env.development"), override: true, quiet: true });
+dotenv.config({ path: resolve(__dirname, "..", ".env.local"), override: true, quiet: true });
 
 const BASE_URL = process.env.BASE_URL || "https://spacemonkey.onrender.com";
 const FETCH_TIMEOUT = 60_000;

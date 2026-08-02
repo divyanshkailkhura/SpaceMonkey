@@ -85,6 +85,11 @@ curl -s -b /tmp/sm.jar -c /tmp/sm.jar -X POST \
   --data-urlencode "callbackUrl=http://localhost:3000/dashboard" \
   -o /dev/null -w "login HTTP:%{http_code}\n"
 export SESSION_TOKEN=$(grep "next-auth.session-token" /tmp/sm.jar | awk '{print $7}')
+# Validate the token is pure base64url — a corrupted token silently 401s every
+# authenticated request (k6/Go drops the offending byte and sends a broken JWT).
+# If this fails, the captured token has a stray non-ASCII byte; inspect it:
+#   node scripts/inspect-token.js <<< "$SESSION_TOKEN"
+[[ "$SESSION_TOKEN" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ERROR: captured SESSION_TOKEN is corrupted (non base64url)" >&2; exit 1; }
 # verify
 curl -s -H "Cookie: next-auth.session-token=$SESSION_TOKEN" http://localhost:3000/api/users/me
 ```
