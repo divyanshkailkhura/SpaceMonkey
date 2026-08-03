@@ -9,6 +9,7 @@ interface ObjectInfoPanelProps {
   onClose: () => void;
   onAddToFavorites?: (name: string, type: string) => void;
   favoriteToast?: string | null;
+  favoriting?: boolean;
 }
 
 export const ObjectInfoPanel: React.FC<ObjectInfoPanelProps> = ({
@@ -19,11 +20,16 @@ export const ObjectInfoPanel: React.FC<ObjectInfoPanelProps> = ({
   onClose,
   onAddToFavorites,
   favoriteToast,
+  favoriting,
 }) => {
   const objectType = details.find((d) => d.key === "Type")?.value ?? "";
 
   return (
-    <div className="fixed top-6 right-6 z-40 w-[420px] max-w-[90vw] rounded-2xl border border-slate-600/50 bg-slate-900/90 backdrop-blur-md shadow-xl animate-slide-in">
+    <div
+      className="fixed top-6 right-6 z-40 w-[90vw] sm:w-[420px] max-w-[90vw] rounded-2xl border border-slate-600/50 bg-slate-900/90 backdrop-blur-md shadow-xl animate-slide-in"
+      role="dialog"
+      aria-label={`Information about ${name}`}
+    >
       <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
         <h3 className="text-xl font-bold text-slate-100">{name}</h3>
         <button
@@ -31,7 +37,7 @@ export const ObjectInfoPanel: React.FC<ObjectInfoPanelProps> = ({
           aria-label="Close object information"
           className="text-slate-400 transition-colors hover:text-slate-200 hover:cursor-pointer"
         >
-          ✕
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
@@ -44,10 +50,8 @@ export const ObjectInfoPanel: React.FC<ObjectInfoPanelProps> = ({
                 <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
                 Loading description...
               </div>
-            ) : wikipediaDescription ? (
-              <p className="text-sm text-slate-300 leading-relaxed">{wikipediaDescription}</p>
             ) : (
-              <p className="text-sm text-slate-500 italic">No description available</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{wikipediaDescription}</p>
             )}
           </div>
         )}
@@ -72,9 +76,16 @@ export const ObjectInfoPanel: React.FC<ObjectInfoPanelProps> = ({
         {onAddToFavorites && (
           <button
             onClick={() => onAddToFavorites(name, objectType)}
-            className="w-full rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-2 text-sm font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20"
+            disabled={favoriting}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-2 text-sm font-medium text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {favoriteToast ?? "☆ Add to Favorites"}
+            {favoriting ? (
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent" />
+            ) : favoriteToast ? (
+              favoriteToast
+            ) : (
+              "☆ Add to Favorites"
+            )}
           </button>
         )}
       </div>

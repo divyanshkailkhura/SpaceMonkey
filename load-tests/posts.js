@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
-import { BASE_URL, getSessionJar, sleepBetween } from './lib/utils.js';
+import { BASE_URL, getSessionJar, sleepBetween, pickIdx } from './lib/utils.js';
 
 const listPosts = new Trend('posts_list');
 const searchPosts = new Trend('posts_search');
@@ -35,6 +35,16 @@ export const options = {
       ],
       exec: 'writePosts',
     },
+    ...(__ENV.SOAK
+      ? {
+          posts_soak: {
+            executor: 'constant-vus',
+            vus: 15,
+            duration: __ENV.SOAK_DURATION || '2m',
+            exec: 'readPosts',
+          },
+        }
+      : {}),
   },
   thresholds: {
     'posts_list': ['p(95)<5000'],
@@ -53,7 +63,10 @@ export function readPosts() {
   group('posts: list', function () {
     const res = http.get(`${BASE_URL}/api/posts`, { jar });
     listPosts.add(res.timings.duration);
-    check(res, { 'list 200': (r) => r.status === 200 });
+    check(res, {
+      'list 200': (r) => r.status === 200,
+      'list has data': (r) => (JSON.parse(r.body).data ?? r.json()).length > 0,
+    });
   });
 
   sleepBetween();
@@ -88,10 +101,11 @@ export function readPosts() {
     const { data } = JSON.parse(listRes.body);
     if (!data || data.length === 0) return;
 
-    const postId = data[0].id;
+    const postId = data[pickIdx(data)].id;
     const res = http.get(`${BASE_URL}/api/posts/${postId}`, { jar });
     getPost.add(res.timings.duration);
     check(res, { 'get 200': (r) => r.status === 200 });
+    check(res, { 'get id matches': (r) => r.status === 200 && (JSON.parse(r.body).data?.id ?? r.json().id) === postId });
   });
 
   sleepBetween();
@@ -125,7 +139,7 @@ export function writePosts() {
     const { data } = JSON.parse(listRes.body);
     if (!data || data.length === 0) return;
 
-    const postId = data[0].id;
+    const postId = data[pickIdx(data)].id;
 
     let res = http.post(
       `${BASE_URL}/api/posts/${postId}/vote`,
@@ -138,7 +152,7 @@ export function writePosts() {
       const freshData = JSON.parse(freshRes.body).data;
       if (freshData?.length) {
         res = http.post(
-          `${BASE_URL}/api/posts/${freshData[0].id}/vote`,
+          `${BASE_URL}/api/posts/${freshData[pickIdx(freshData)].id}/vote`,
           JSON.stringify({ type: 'UP' }),
           { jar, headers: { 'Content-Type': 'application/json' } }
         );
@@ -158,7 +172,7 @@ export function writePosts() {
     const { data } = JSON.parse(listRes.body);
     if (!data || data.length === 0) return;
 
-    const postId = data[0].id;
+    const postId = data[pickIdx(data)].id;
 
     const res = http.post(
       `${BASE_URL}/api/posts/${postId}/comments`,

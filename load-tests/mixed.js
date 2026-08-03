@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
-import { BASE_URL, getSessionJar, sleepBetween } from './lib/utils.js';
+import { BASE_URL, getSessionJar, sleepBetween, pickIdx } from './lib/utils.js';
 
 const scenarioDuration = new Trend('mixed_scenario');
 
@@ -17,6 +17,15 @@ export const options = {
         { duration: '30s', target: 0 },
       ],
     },
+    ...(__ENV.SOAK
+      ? {
+          mixed_soak: {
+            executor: 'constant-vus',
+            vus: __ENV.SOAK_VUS || 10,
+            duration: __ENV.SOAK_DURATION || '3m',
+          },
+        }
+      : {}),
   },
   thresholds: {
     'mixed_scenario': ['p(95)<60000'],
@@ -52,7 +61,7 @@ export default function () {
     const { data } = JSON.parse(feedRes.body);
     if (!data || data.length === 0) return;
 
-    const postId = data[0].id;
+    const postId = data[pickIdx(data)].id;
 
     const postRes = http.get(`${BASE_URL}/api/posts/${postId}`, { jar });
     check(postRes, { 'post 200': (r) => r.status === 200 });

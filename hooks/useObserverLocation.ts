@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { DEFAULT_LOCATION } from "../constants";
 import type { ObserverLocation } from "../types";
 
@@ -32,24 +32,36 @@ export function useObserverLocation() {
   const [location, setLocation] = useState<ObserverLocation>(loadCachedLocation);
   const [cityQuery, setCityQuery] = useState("");
   const [citySearching, setCitySearching] = useState(false);
+  const [geolocating, setGeolocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const geolocateAbortRef = useRef<AbortController | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const handleFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setLocation((prev) => ({ ...prev, [name]: name === "name" ? value : Number(value) }));
   };
 
-  const handleGeolocation = (silent = false) => {
+  const handleGeolocation = useCallback(async (silent = false) => {
     if (!navigator.geolocation) {
       if (!silent) setError("Geolocation not supported on this device");
       return;
     }
 
+    geolocateAbortRef.current?.abort();
+    const abortController = new AbortController();
+    geolocateAbortRef.current = abortController;
+
+    setGeolocating(true);
+
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
+        if (abortController.signal.aborted) return;
         try {
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}`
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}`,
+            { signal: abortController.signal }
           );
           const data = await res.json();
           const nice =
@@ -65,26 +77,36 @@ export function useObserverLocation() {
           const loc: ObserverLocation = { name: "My Location", latitude: coords.latitude, longitude: coords.longitude, altitude: 10 };
           setLocation(loc);
           saveLocation(loc);
+        } finally {
+          setGeolocating(false);
         }
       },
       () => {
         if (!silent) setError("Location access denied");
+        setGeolocating(false);
       }
     );
-  };
+  }, []);
 
   useEffect(() => {
     if (!localStorage.getItem(STORAGE_KEY)) {
       handleGeolocation(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCitySearch = async () => {
     if (!cityQuery.trim()) return;
+
+    searchAbortRef.current?.abort();
+    const abortController = new AbortController();
+    searchAbortRef.current = abortController;
+
     setCitySearching(true);
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(cityQuery)}`
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(cityQuery)}`,
+        { signal: abortController.signal }
       );
       const [match] = await res.json();
       if (!match) {
@@ -114,6 +136,7 @@ export function useObserverLocation() {
     cityQuery,
     setCityQuery,
     citySearching,
+    geolocating,
     error,
     clearError,
     handleFieldChange,

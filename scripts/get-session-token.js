@@ -108,14 +108,43 @@ async function main() {
   for (const cookie of loginSetCookie) console.error(`  ${cookie.slice(0, 150)}`);
   console.error("Login body url:", loginBody.url);
 
-  // 3b. Extract session token — try both secure and non-secure cookie names
+  // 3b. Extract session token — try both secure and non-secure cookie names.
+  // NextAuth splits large JWEs across chunked cookies (name.0, name.1, ...)
+  // once the token exceeds ~4KB, so check for chunks before falling back
+  // to a single unsuffixed cookie.
+  function getPossiblyChunkedCookie(jar, baseName) {
+    const chunkKeys = Array.from(jar.keys())
+      .filter((k) => k === baseName || k.startsWith(`${baseName}.`))
+      .sort((a, b) => {
+        const ai = a === baseName ? -1 : parseInt(a.slice(baseName.length + 1), 10);
+        const bi = b === baseName ? -1 : parseInt(b.slice(baseName.length + 1), 10);
+        return ai - bi;
+      });
+    if (chunkKeys.length === 0) return null;
+    return chunkKeys.map((k) => jar.get(k)).join("");
+  }
+
   const sessionToken =
-    cookieJar.get("__Secure-next-auth.session-token") ??
-    cookieJar.get("next-auth.session-token");
+    getPossiblyChunkedCookie(cookieJar, "__Secure-next-auth.session-token") ??
+    getPossiblyChunkedCookie(cookieJar, "next-auth.session-token");
 
   if (!sessionToken) {
     console.error("No session token cookie found. Cookie jar:");
     for (const [k, v] of cookieJar) console.error(`  ${k}=${v.slice(0, 50)}...`);
+    process.exit(1);
+  }
+
+  // Hard validation: a real JWT/JWE is pure base64url (A-Z a-z 0-9 - _ .)
+  // split into dot-separated segments. Anything outside that set means the
+  // token was corrupted somewhere upstream (e.g. a UTF-8 byte sequence
+  // getting misread as Latin-1). Fail loudly here instead of silently
+  // emitting a broken token that only surfaces as a mysterious 100%
+  // auth-failure rate three processes later in a load test.
+  if (!/^[A-Za-z0-9\-_.]+$/.test(sessionToken)) {
+    const badCharIndex = [...sessionToken].findIndex((c) => !/[A-Za-z0-9\-_.]/.test(c));
+    console.error("Session token contains invalid characters — likely corrupted in transit.");
+    console.error(`  First bad character at index ${badCharIndex}: ${JSON.stringify(sessionToken[badCharIndex])} (code point ${sessionToken.codePointAt(badCharIndex)})`);
+    console.error(`  Token preview: ${JSON.stringify(sessionToken.slice(0, 60))}`);
     process.exit(1);
   }
   console.error(`Got session token: ${sessionToken.slice(0, 20)}...`);

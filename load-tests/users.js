@@ -44,6 +44,7 @@ export default function () {
     const res = http.get(`${BASE_URL}/api/users/me`, { jar });
     meDuration.add(res.timings.duration);
     check(res, { 'me 200': (r) => r.status === 200 });
+    check(res, { 'me has id': (r) => r.status === 200 && !!(JSON.parse(r.body).data?.id ?? r.json().id) });
   });
 
   sleepBetween();

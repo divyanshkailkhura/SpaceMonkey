@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
-import { BASE_URL, getSessionJar, randomSuffix, sleepBetween } from './lib/utils.js';
+import { BASE_URL, getSessionJar, randomSuffix, sleepBetween, pickIdx } from './lib/utils.js';
 
 const listCommunities = new Trend('communities_list');
 const searchCommunities = new Trend('communities_search');
@@ -49,7 +49,10 @@ export function readCommunities() {
   group('communities: list', function () {
     const res = http.get(`${BASE_URL}/api/communities`, { jar });
     listCommunities.add(res.timings.duration);
-    check(res, { 'list 200': (r) => r.status === 200 });
+    check(res, {
+      'list 200': (r) => r.status === 200,
+      'list has data': (r) => (JSON.parse(r.body).data ?? r.json()).length > 0,
+    });
   });
 
   sleepBetween();
@@ -69,11 +72,12 @@ export function readCommunities() {
     const { data } = JSON.parse(listRes.body);
     if (!data || data.length === 0) return;
 
-    const slug = data[0].slug;
+    const slug = data[pickIdx(data)].slug;
 
     const detailRes = http.get(`${BASE_URL}/api/communities/${slug}`, { jar });
     getCommunity.add(detailRes.timings.duration);
     check(detailRes, { 'detail 200': (r) => r.status === 200 });
+    check(detailRes, { 'detail slug matches': (r) => r.status === 200 && (JSON.parse(r.body).data?.slug ?? r.json().slug) === slug });
 
     const postsRes = http.get(`${BASE_URL}/api/posts?communityId=${slug}`, { jar });
     communityPosts.add(postsRes.timings.duration);
@@ -111,7 +115,7 @@ export function writeCommunities() {
     const { data } = JSON.parse(listRes.body);
     if (!data || data.length === 0) return;
 
-    const slug = data[0].slug;
+    const slug = data[pickIdx(data)].slug;
 
     const res = http.post(`${BASE_URL}/api/communities/${slug}/join`, null, { jar });
     joinCommunity.add(res.timings.duration);

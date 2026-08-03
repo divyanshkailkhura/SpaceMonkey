@@ -37,14 +37,47 @@ export function validateSessionToken(token) {
   );
 }
 
+// Token pool: each VU gets its own token so the load simulates N independent
+// users instead of N connections all acting as one account. Set TOKEN_POOL to
+// a JSON array of session tokens (one per user). To scatter by VU deterministically.
+const TOKEN_POOL_CACHE = __ENV.TOKEN_POOL ? JSON.parse(__ENV.TOKEN_POOL) : null;
+const USER_POOL_CACHE = __ENV.USER_POOL ? JSON.parse(__ENV.USER_POOL) : null;
+
+export function poolSize() {
+  return TOKEN_POOL_CACHE ? TOKEN_POOL_CACHE.length : 0;
+}
+
+// Resolve the token for the current VU. Falls back to the single SESSION_TOKEN.
+export function getSessionToken() {
+  if (TOKEN_POOL_CACHE && TOKEN_POOL_CACHE.length > 0) {
+    return TOKEN_POOL_CACHE[__VU % TOKEN_POOL_CACHE.length];
+  }
+  return validateSessionToken(__ENV.SESSION_TOKEN);
+}
+
+// Resolve credentials for the current VU from USER_POOL (JSON of {email,password}).
+// Falls back to TEST_EMAIL/TEST_PASSWORD.
+export function getCredentials() {
+  if (USER_POOL_CACHE && USER_POOL_CACHE.length > 0) {
+    return USER_POOL_CACHE[__VU % USER_POOL_CACHE.length];
+  }
+  return { email: __ENV.TEST_EMAIL, password: __ENV.TEST_PASSWORD };
+}
+
 export function getSessionJar() {
   const jar = http.cookieJar();
-  const token = validateSessionToken(__ENV.SESSION_TOKEN);
+  const token = getSessionToken();
 
   jar.set(BASE_URL, 'next-auth.session-token', token, { path: '/' });
   jar.set(BASE_URL, '__Secure-next-auth.session-token', token, { path: '/' });
 
   return jar;
+}
+
+// De-hot-spot: pick a stable, scattered index across a list so all VUs don't
+// hammer data[0]. Each VU deterministically targets a different record.
+export function pickIdx(list) {
+  return __VU % list.length;
 }
 
 export function login(email, password) {
