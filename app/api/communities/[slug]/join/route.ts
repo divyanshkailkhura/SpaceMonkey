@@ -25,19 +25,23 @@ export async function POST(
   });
 
   if (existing) {
-    await db.communityMember.delete({
-      where: { id: existing.id },
+    await db.communityMember.deleteMany({
+      where: { communityId: community.id, userId: session.user.id },
     });
     return NextResponse.json({ data: { joined: false } });
   }
 
-  await db.communityMember.create({
-    data: {
-      communityId: community.id,
-      userId: session.user.id,
-      role: "MEMBER",
-    },
-  });
+  try {
+    await db.communityMember.create({
+      data: {
+        communityId: community.id,
+        userId: session.user.id,
+        role: "MEMBER",
+      },
+    });
+  } catch (err) {
+    if ((err as { code?: string }).code !== "P2002") throw err;
+  }
 
   return NextResponse.json({ data: { joined: true } });
 }

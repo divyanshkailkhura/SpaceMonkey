@@ -35,7 +35,9 @@ export async function POST(req: Request) {
     where: { userId_objectName: { userId: session.user.id, objectName: objectName.trim() } },
   });
   if (existing) {
-    await db.favoriteObject.delete({ where: { id: existing.id } });
+    await db.favoriteObject.deleteMany({
+      where: { userId: session.user.id, objectName: objectName.trim() },
+    });
     return NextResponse.json({ data: null });
   }
 
@@ -45,6 +47,9 @@ export async function POST(req: Request) {
       objectName: objectName.trim(),
       objectType: objectType?.trim() || null,
     },
+  }).catch((err: { code?: string } & Error) => {
+    if (err.code !== "P2002") throw err;
+    return null;
   });
 
   return NextResponse.json({ data: favorite }, { status: 201 });
