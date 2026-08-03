@@ -90,6 +90,10 @@ model Post {
   comments Comment[]
   votes    PostVote[]
   tags     PostTag[]
+
+  @@index([createdAt])
+  @@index([authorId, createdAt])
+  @@index([communityId, createdAt])
 }
 
 model Comment {
@@ -100,6 +104,9 @@ model Comment {
   authorId  String
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+  @@index([authorId])
 }
 
 enum VoteType {
@@ -128,6 +135,7 @@ model Follow {
   following User @relation("UserFollowed", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
+  @@index([followingId])
 }
 
 model Observation {
@@ -142,6 +150,8 @@ model Observation {
   coordinates   String?
   observedAt    DateTime @default(now())
   createdAt     DateTime @default(now())
+
+  @@index([userId])
 }
 
 model FavoriteObject {
