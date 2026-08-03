@@ -42,6 +42,15 @@ next-env.d.ts
 
 /generated/prisma
 
+# load test results (except the 3 baseline refs)
+load-tests/results/*
+!load-tests/results/posts-prod.json
+!load-tests/results/posts-scenario-a.json
+!load-tests/results/posts-scenario-b.json
+
+# raw seed data (73MB SQL dump)
+data-seed/
+
 # skills
 /.claude/
 /.agents/

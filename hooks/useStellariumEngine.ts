@@ -48,6 +48,7 @@ export function useStellariumEngine({
 }: UseStellariumEngineArgs) {
   const [stel, setStel] = useState<StelEngine | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const initialLocationRef = useRef(initialLocation);
   const onSelectionChangeRef = useRef(onSelectionChange);
@@ -90,12 +91,17 @@ export function useStellariumEngine({
           } catch (e) {
             console.error(e);
             setError("Failed to initialise Stellarium data");
+          } finally {
+            setLoading(false);
           }
         },
       });
     };
 
-    script.onerror = () => setError("Failed to load Stellarium script");
+    script.onerror = () => {
+      setError("Failed to load Stellarium script");
+      setLoading(false);
+    };
     document.body.appendChild(script);
 
     return () => {
@@ -106,7 +112,7 @@ export function useStellariumEngine({
 
   const clearError = () => setError(null);
 
-  return { stel, error, clearError };
+  return { stel, error, clearError, loading };
 }
 
 /** Pushes user-edited location state into the live engine observer. */

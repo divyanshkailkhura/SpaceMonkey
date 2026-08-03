@@ -10,7 +10,7 @@ export function Footer() {
             <div className="flex items-center space-x-2">
               <Telescope className="h-6 w-6 text-purple-500" />
               <span className="text-lg font-bold bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">
-                AstroMentor
+                SpaceMonkey
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -93,7 +93,7 @@ export function Footer() {
         </div>
 
         <div className="mt-8 border-t border-purple-800/20 pt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; 2023 AstroMentor. All rights reserved.</p>
+          <p>&copy; 2023 SpaceMonkey. All rights reserved.</p>
         </div>
       </div>
     </footer>

@@ -4,7 +4,7 @@
  * prefixes (NGC/M/HD/...) and parenthetical suffixes stripped, since
  * Wikipedia article titles rarely match catalog designations exactly.
  */
-export async function fetchWikipediaSummary(objectName: string): Promise<string | null> {
+export async function fetchWikipediaSummary(objectName: string, signal?: AbortSignal): Promise<string | null> {
   const cleanName = objectName
     .replace(/^(HD|HR|HIP|NGC|M|IC)\s+/, "")
     .replace(/\s+\([^)]+\)$/, "")
@@ -18,7 +18,7 @@ export async function fetchWikipediaSummary(objectName: string): Promise<string 
         term
       )}&prop=extracts&exintro&explaintext&exsentences=3&redirects=1`;
 
-      const response = await fetch(url);
+      const response = await fetch(url, { signal });
       const data = await response.json();
       const pages = data?.query?.pages ?? {};
       const pageId = Object.keys(pages)[0];

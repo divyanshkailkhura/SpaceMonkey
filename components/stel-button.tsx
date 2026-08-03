@@ -9,14 +9,6 @@ interface StelButtonProps {
   attr: string;
 }
 
-/**
- * Toggles a boolean property directly on a Stellarium engine module
- * (e.g. `core.dsos.visible = true`). This isn't a shortcut around React
- * state: the engine's WASM bindings expose setters that fire the
- * engine's own "change" event on assignment, which is what the parent
- * listens to in order to re-render. Mutating `obj[attr]` is the
- * intended way to drive the engine.
- */
 export const StelButton: React.FC<StelButtonProps> = ({ label, img, obj, attr }) => {
   const active = Boolean(obj?.[attr]);
 
@@ -28,6 +20,7 @@ export const StelButton: React.FC<StelButtonProps> = ({ label, img, obj, attr })
   return (
     <button
       aria-label={`Toggle ${label || "option"}`}
+      title={`${label}${active ? " (active)" : " (inactive)"}`}
       aria-pressed={active}
       onClick={handleClick}
       className={`group flex h-12 w-12 items-center justify-center rounded-xl border transition-all duration-300 hover:shadow-lg hover:cursor-pointer
@@ -40,6 +33,8 @@ export const StelButton: React.FC<StelButtonProps> = ({ label, img, obj, attr })
       <img
         src={img}
         alt={label}
+        loading="lazy"
+        decoding="async"
         className={`h-6 w-6 object-contain transition-opacity duration-200 ${
           active ? "opacity-100" : "opacity-60 group-hover:opacity-90"
         }`}

@@ -30,13 +30,19 @@ export async function POST(
   });
 
   if (existing) {
-    await db.follow.delete({ where: { id: existing.id } });
+    await db.follow.deleteMany({
+      where: { followerId: session.user.id, followingId: id },
+    });
     return NextResponse.json({ data: { following: false } });
   }
 
-  await db.follow.create({
-    data: { followerId: session.user.id, followingId: id },
-  });
+  try {
+    await db.follow.create({
+      data: { followerId: session.user.id, followingId: id },
+    });
+  } catch (err) {
+    if ((err as { code?: string }).code !== "P2002") throw err;
+  }
 
   return NextResponse.json({ data: { following: true } });
 }

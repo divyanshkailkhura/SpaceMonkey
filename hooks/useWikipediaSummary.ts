@@ -1,38 +1,54 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { UNKNOWN_OBJECT_NAME } from "../constants";
 import { fetchWikipediaSummary } from "../utils/wikipedia";
 
-/**
- * Fetches (and cancels stale fetches for) a Wikipedia summary whenever
- * `objectName` changes. Pass `null` to clear the description, e.g. when
- * nothing is selected.
- */
 export function useWikipediaSummary(objectName: string | null) {
   const [description, setDescription] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    abortRef.current?.abort();
 
     if (!objectName || objectName === UNKNOWN_OBJECT_NAME) {
       setDescription(null);
       setLoading(false);
+      setError(null);
       return;
     }
 
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
     setLoading(true);
+    setError(null);
     setDescription(null);
 
-    fetchWikipediaSummary(objectName).then((result) => {
-      if (cancelled) return;
-      setDescription(result);
-      setLoading(false);
-    });
+    fetchWikipediaSummary(objectName, abortController.signal)
+      .then((result) => {
+        if (abortController.signal.aborted) return;
+        if (result) {
+          setDescription(result);
+        } else {
+          setError("No Wikipedia article found");
+        }
+      })
+      .catch(() => {
+        if (abortController.signal.aborted) return;
+        setError("Failed to load description");
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
+      });
 
     return () => {
-      cancelled = true;
+      abortController.abort();
     };
   }, [objectName]);
 
-  return { description, loading };
+  return { description, loading, error };
 }

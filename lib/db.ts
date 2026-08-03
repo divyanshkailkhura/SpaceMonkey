@@ -29,13 +29,18 @@ async function createPool(): Promise<Pool> {
     });
   });
 
+  const isLocal =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1";
+
   return new Pool({
     host: ip,
     port,
     user,
     password,
     database,
-    ssl: { rejectUnauthorized: false, servername: hostname },
+    ssl: isLocal ? false : { rejectUnauthorized: false, servername: hostname },
     connectionTimeoutMillis: 15000,
   });
 }
@@ -47,6 +52,6 @@ export async function getDb(): Promise<PrismaClient> {
   const adapter = new PrismaPg(pool);
   const client = new PrismaClient({ adapter });
 
-  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
+  globalForPrisma.prisma = client;
   return client;
 }
